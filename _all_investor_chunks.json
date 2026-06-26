@@ -1,0 +1,116 @@
+[
+  {
+    "line": 276,
+    "len": 1939,
+    "new": "  return (\n    <div className=\"mx-auto max-w-6xl px-6 py-8\">\n      {/* Investor profile summary — registration data visible */}\n      <div className=\"mb-6 rounded-2xl border border-orange-200/60 bg-gradient-to-r from-orange-50 to-amber-50/80 p-5 shadow-sm\">\n        <div className=\"flex flex-wrap items-start justify-between gap-4\">\n          <div>\n            <p className=\"text-[10px] font-bold uppercase tracking-wider text-orange-600\">Your Investor Profile</p>\n            <h2 className=\"font-display text-xl font-bold text-foreground\">{investor.name || \"Investor\"}</h2>\n            <p className=\"mt-1 text-xs text-muted-foreground\">\n              {investor.entityType || \"Individual\"} &bull; {investor.location || \"Location not set\"}\n            </p>\n          </div>\n          <Button\n            size=\"sm\"\n            variant=\"outline\"\n            className=\"rounded-full border-orange-300 text-orange-700\"\n            onClick={() => setShowCommunityFull(true)}\n          >\n            <Globe className=\"mr-1.5 h-4 w-4\" /> Community Lounge\n          </Button>\n        </div>\n        <div className=\"mt-4 grid gap-3 sm:grid-cols-3\">\n          <div className=\"rounded-xl bg-white/80 p-3 text-xs\">\n            <p className=\"font-bold text-orange-800\">Capital Range</p>\n            <p className=\"mt-1 text-foreground\">{investor.budgetRange || investor.ticketSize || \"—\"}</p>\n          </div>\n          <div className=\"rounded-xl bg-white/80 p-3 text-xs\">\n            <p className=\"font-bold text-orange-800\">Focus Categories</p>\n            <p className=\"mt-1 text-foreground\">{(investor.categories ?? []).join(\", \") || \"—\"}</p>\n          </div>\n          <div className=\"rounded-xl bg-white/80 p-3 text-xs sm:col-span-1\">\n            <p className=\"font-bold text-orange-800\">Investment Strategy</p>\n            <p className=\"mt-1 line-clamp-3 text-foreground\">{investor.strategy || \"—\"}</p>\n          </div>\n        </div>\n      </div>",
+    "old": "  return (\n    <div className=\"mx-auto max-w-6xl px-6 py-8\">"
+  },
+  {
+    "line": 276,
+    "len": 568,
+    "new": "          <button\n            onClick={() => setShowCommunityFull(true)}\n            className={`rounded-full px-4 py-2 text-xs font-semibold transition-all flex items-center gap-1.5 ${\n              tab === \"community\"\n                ? \"bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg\"\n                : \"text-muted-foreground hover:text-foreground hover:bg-white/80\"\n            }`}\n          >\n            <Globe className=\"h-3.5 w-3.5\" />\n            Community\n          </button>\n          <button\n            onClick={() => setTab(\"chatbot\")}",
+    "old": "          <button\n            onClick={() => setTab(\"chatbot\")}"
+  },
+  {
+    "line": 276,
+    "len": 565,
+    "new": "  if (!sessionReady || !isInvestorRegisteredCheck) {\n    return (\n      <div className=\"flex h-[80vh] flex-col items-center justify-center gap-3\">\n        <Loader2 className=\"h-8 w-8 animate-spin text-accent\" />\n        <p className=\"text-sm text-muted-foreground\">Loading investor profile...</p>\n      </div>\n    );\n  }\n\n  if (showCommunityFull || tab === \"community\") {\n    return (\n      <div className=\"mx-auto max-w-[1600px] px-4 py-6\">\n        <ModuleCommunityHub onClose={() => { setShowCommunityFull(false); setTab(\"discover\"); }} />\n      </div>\n    );\n  }",
+    "old": "  if (!sessionReady || !isInvestorRegisteredCheck) {\n    return (\n      <div className=\"flex h-[80vh] items-center justify-center\">\n        <Loader2 className=\"h-8 w-8 animate-spin text-accent\" />\n      </div>\n    );\n  }"
+  },
+  {
+    "line": 731,
+    "len": 423,
+    "new": "  useEffect(() => {\n    if (!sessionReady || authLoading) return;\n    if (isInvestorRegisteredCheck) return;\n    // Fresh registration may still be hydrating — don't bounce to login immediately\n    if (currentUser && (userData?.role === \"investor\" || role === \"investor\")) return;\n    navigate({ to: \"/app/login\" });\n  }, [sessionReady, authLoading, isInvestorRegisteredCheck, currentUser, userData?.role, role, navigate]);",
+    "old": "  useEffect(() => {\n    if (sessionReady && !isInvestorRegisteredCheck) {\n      navigate({ to: \"/app/login\" });\n    }\n  }, [sessionReady, isInvestorRegisteredCheck, navigate]);"
+  },
+  {
+    "line": 776,
+    "len": 341,
+    "new": "  if (showCommunityFull || tab === \"community\") {\n    return (\n      <div className=\"mx-auto min-h-screen max-w-[1600px] px-4 py-6\">\n        <InvestorDashboardErrorBoundary>\n          <ModuleCommunityHub onClose={() => { setShowCommunityFull(false); setTab(\"discover\"); }} />\n        </InvestorDashboardErrorBoundary>\n      </div>\n    );\n  }",
+    "old": "  if (showCommunityFull || tab === \"community\") {\n    return (\n      <div className=\"mx-auto max-w-[1600px] px-4 py-6\">\n        <ModuleCommunityHub onClose={() => { setShowCommunityFull(false); setTab(\"discover\"); }} />\n      </div>\n    );\n  }"
+  },
+  {
+    "line": 756,
+    "len": 323,
+    "new": "          <InvestorIdeasFeed\n          investor={investor}\n          searchQuery={feedSearchQuery}\n          onSearchChange={setFeedSearchQuery}\n          onSearchInteract={triggerHeaderSunBlink}\n          ideas={filteredStartupIdeas}\n          liveFounderCount={liveCount}\n          loadingLive={pitchesLoading}\n        />",
+    "old": "          <InvestorIdeasFeed\n          investor={investor}\n          searchQuery={feedSearchQuery}\n          onSearchChange={setFeedSearchQuery}\n          onSearchInteract={triggerHeaderSunBlink}\n          ideas={filteredStartupIdeas}\n        />"
+  },
+  {
+    "line": 776,
+    "len": 318,
+    "new": "                  {inv.equityPercent != null ? (\n                    <p className=\"mt-1 text-xs text-emerald-700\">\n                      {Number(inv.equityPercent).toFixed(2)}% equity stake &bull; Escrow verified via {inv.paymentMethod?.toUpperCase() || \"platform\"}\n                    </p>\n                  ) : null}",
+    "old": "                  {inv.equityPercent ? (\n                    <p className=\"mt-1 text-xs text-emerald-700\">\n                      {inv.equityPercent.toFixed(2)}% equity stake &bull; Escrow verified via {inv.paymentMethod?.toUpperCase() || \"platform\"}\n                    </p>\n                  ) : null}"
+  },
+  {
+    "line": 732,
+    "len": 304,
+    "new": "function InvestorDashboard() {\n  const { investor, business, offers, investments, addOffer, addInvestment, role } = useAppState();\n  const { sessionReady, isInvestorRegistered } = useInvestorSession();\n  const { currentUser, userData, loading: authLoading } = useAuth();\n  const navigate = useNavigate();",
+    "old": "function InvestorDashboard() {\n  const { investor, business, offers, investments, addOffer, addInvestment } = useAppState();\n  const { sessionReady, isInvestorRegistered } = useInvestorSession();\n  const navigate = useNavigate();"
+  },
+  {
+    "line": 756,
+    "len": 240,
+    "new": "  const { pitchedIdeas, loading: pitchesLoading, liveCount } = usePitchedIdeas();\n  const allStartupIdeas = mergeStartupIdeas(STARTUP_IDEAS, pitchedIdeas);\n  const filteredStartupIdeas = filterStartupIdeas(allStartupIdeas, feedSearchQuery);",
+    "old": "  const { pitchedIdeas } = usePitchedIdeas();\n  const allStartupIdeas = mergeStartupIdeas(STARTUP_IDEAS, pitchedIdeas);\n  const filteredStartupIdeas = filterStartupIdeas(allStartupIdeas, feedSearchQuery);"
+  },
+  {
+    "line": 276,
+    "len": 207,
+    "new": "  const [tab, setTab] = useState<\"discover\" | \"listings\" | \"portfolio\" | \"quotes\" | \"payment-desk\" | \"chatbot\" | \"community\">(\"discover\");\n  const [showCommunityFull, setShowCommunityFull] = useState(false);",
+    "old": "  const [tab, setTab] = useState<\"discover\" | \"listings\" | \"portfolio\" | \"quotes\" | \"payment-desk\" | \"chatbot\">(\"discover\");"
+  },
+  {
+    "line": 776,
+    "len": 182,
+    "new": "import { ModuleCommunityHub } from \"@/components/community/ModuleCommunityHub\";\nimport { InvestorDashboardErrorBoundary } from \"@/components/investor/InvestorDashboardErrorBoundary\";",
+    "old": "import { ModuleCommunityHub } from \"@/components/community/ModuleCommunityHub\";"
+  },
+  {
+    "line": 732,
+    "len": 173,
+    "new": "import { usePitchedIdeas } from \"@/hooks/usePitchedIdeas\";\nimport { useInvestorSession } from \"@/hooks/useInvestorSession\";\nimport { useAuth } from \"@/contexts/AuthContext\";",
+    "old": "import { usePitchedIdeas } from \"@/hooks/usePitchedIdeas\";\nimport { useInvestorSession } from \"@/hooks/useInvestorSession\";"
+  },
+  {
+    "line": 276,
+    "len": 149,
+    "new": "import { ReviewSubmitWidget } from \"@/components/ReviewSubmitWidget\";\nimport { ModuleCommunityHub } from \"@/components/community/ModuleCommunityHub\";",
+    "old": "import { ReviewSubmitWidget } from \"@/components/ReviewSubmitWidget\";"
+  },
+  {
+    "line": 776,
+    "len": 122,
+    "new": "                          {inv.equityPercent != null ? <> &bull; {Number(inv.equityPercent).toFixed(2)}% equity</> : null}",
+    "old": "                          {inv.equityPercent ? <> &bull; {inv.equityPercent.toFixed(2)}% equity</> : null}"
+  },
+  {
+    "line": 776,
+    "len": 120,
+    "new": "  return (\n    <InvestorDashboardErrorBoundary>\n      <InvestorDashboard />\n    </InvestorDashboardErrorBoundary>\n  );\n}",
+    "old": "  return <InvestorDashboard />;\n}"
+  },
+  {
+    "line": 776,
+    "len": 120,
+    "new": "            onClick={() => {\n              setTab(\"community\");\n              setShowCommunityFull(true);\n            }}",
+    "old": "            onClick={() => setShowCommunityFull(true)}"
+  },
+  {
+    "line": 731,
+    "len": 51,
+    "new": "  Briefcase,\n  Sun,\n  Coins,\n} from \"lucide-react\";",
+    "old": "  Briefcase,\n  Sun,\n} from \"lucide-react\";"
+  },
+  {
+    "line": 294,
+    "len": 42,
+    "new": "  Briefcase,\n  Sun,\n} from \"lucide-react\";",
+    "old": "  Briefcase,\n  Sun,\n  Globe,\n} from \"lucide-react\";"
+  },
+  {
+    "line": 276,
+    "len": 31,
+    "new": "  Globe,\n} from \"lucide-react\";",
+    "old": "  Coins,\n} from \"lucide-react\";"
+  }
+]

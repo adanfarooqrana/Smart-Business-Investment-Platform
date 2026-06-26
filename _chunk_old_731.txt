@@ -1,0 +1,4 @@
+function InvestorDashboard() {
+  const { investor, business, offers, investments, addOffer, addInvestment } = useAppState();
+  const { sessionReady, isInvestorRegistered } = useInvestorSession();
+  const navigate = useNavigate();

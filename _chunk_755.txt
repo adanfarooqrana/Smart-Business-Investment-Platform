@@ -1,0 +1,9 @@
+          <InvestorIdeasFeed
+          investor={investor}
+          searchQuery={feedSearchQuery}
+          onSearchChange={setFeedSearchQuery}
+          onSearchInteract={triggerHeaderSunBlink}
+          ideas={filteredStartupIdeas}
+          liveFounderCount={liveCount}
+          loadingLive={pitchesLoading}
+        />

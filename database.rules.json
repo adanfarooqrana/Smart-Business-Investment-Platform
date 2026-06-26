@@ -1,0 +1,132 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+
+    "entrepreneurs": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+
+    "investors": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+
+    "wholesalers": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+
+    "community_posts": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+
+    "messages": {
+      "$messageId": {
+        ".read": "auth != null && (data.child('fromId').val() == auth.uid || data.child('toId').val() == auth.uid)",
+        ".write": "auth != null && ((!data.exists() && newData.child('fromId').val() == auth.uid) || data.child('fromId').val() == auth.uid || (data.child('toId').val() == auth.uid && newData.child('read').val() == true))"
+      }
+    },
+
+    "groups": {
+      ".read": "auth != null",
+      "$groupId": {
+        ".write": "auth != null && (!data.exists() ? newData.child('createdBy').val() == auth.uid : data.child('createdBy').val() == auth.uid)"
+      }
+    },
+
+    "group_messages": {
+      "$groupId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+
+    "sample_orders": {
+      ".indexOn": ["founderId", "investorId"],
+      "$orderId": {
+        ".read": "auth != null && (data.child('investorId').val() == auth.uid || data.child('founderId').val() == auth.uid)",
+        ".write": "auth != null && ((!data.exists() && newData.child('investorId').val() == auth.uid) || (data.exists() && data.child('founderId').val() == auth.uid && newData.child('founderId').val() == auth.uid))"
+      }
+    },
+
+    "payments": {
+      "$paymentId": {
+        ".read": "auth != null && (data.child('investorId').val() == auth.uid || data.child('founderId').val() == auth.uid)",
+        ".write": "auth != null && newData.child('investorId').val() == auth.uid"
+      }
+    },
+
+    "video_lounge": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
+    "notifications": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+
+    "followers": {
+      "$followerId": {
+        ".read": "auth != null",
+        ".write": "auth != null && newData.child('followerId').val() == auth.uid"
+      }
+    },
+
+    "points": {
+      "$userId": {
+        ".read": "auth != null && auth.uid == $userId",
+        ".write": "auth != null && auth.uid == $userId"
+      }
+    },
+
+    "user_directory": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+
+    "platform_stats": {
+      ".read": true,
+      ".write": true
+    },
+
+    "landing_testimonials": {
+      ".read": true,
+      ".write": true
+    },
+
+    "investor_feed": {
+      ".read": true,
+      "$ideaId": {
+        ".write": "auth != null && newData.child('entrepreneurUid').val() == auth.uid"
+      }
+    },
+
+    "founder_problems": {
+      ".read": "auth != null",
+      "$problemId": {
+        ".write": "auth != null && newData.child('founderId').val() == auth.uid"
+      }
+    }
+  }
+}
