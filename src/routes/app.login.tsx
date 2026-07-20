@@ -15,7 +15,6 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppState, repairAppState } from "@/hooks/useAppState";
 import { getUserRole } from "@/services/firebaseService";
-import { hydrateEntrepreneurFromRtdb } from "@/hooks/useFounderSession";
 import { hydrateInvestorFromRtdb } from "@/hooks/useInvestorSession";
 import { hydrateBusinessFromRtdb } from "@/hooks/useBusinessSession";
 import { Button } from "@/components/ui/button";
@@ -81,10 +80,9 @@ function LoginPage() {
       navigate({ to: "/founder/dashboard" });
       return true;
     }
+    // Investors MUST use Firebase Auth UID — local-only login creates detached RTDB roots
     if (investor?.isRegistered && investor?.email?.toLowerCase() === e && investor?.password === p) {
-      registerInvestor({ ...investor, email: investor.email, password: p });
-      navigate({ to: "/app/investor" });
-      return true;
+      return false;
     }
     if (business?.isRegistered && business?.email?.toLowerCase() === e && business?.password === p) {
       registerBusiness({ ...business, email: business.email, password: p });
@@ -106,27 +104,63 @@ function LoginPage() {
     displayName?: string,
   ) => {
     repairAppState();
-    const userData = await refreshUserData(uid);
-    let role = userData?.role ?? (await getUserRole(uid));
-
-    if (!role) {
-      const { getEntrepreneurProfile } = await import("@/services/entrepreneurService");
-      const founderProfile = await getEntrepreneurProfile(uid).catch(() => null);
-      if (founderProfile) role = "entrepreneur";
-    }
 
     const fallback = {
       email: loginEmail,
       password: loginPassword,
-      name: displayName ?? userData?.name ?? loginEmail.split("@")[0],
+      name: displayName ?? loginEmail.split("@")[0],
     };
 
-    if (role === "entrepreneur") {
-      await hydrateEntrepreneurFromRtdb(uid, registerEntrepreneur, fallback);
-      setRole("entrepreneur");
-      setIsLoggedIn(true);
-      navigate({ to: "/founder/dashboard" });
-      return;
+    // Founder handshake: verify nested founders/{uid}/profile before any dashboard mount
+    try {
+      const { verifyFounderSession, getFounderStats } = await import(
+        "@/services/founderFirebaseService"
+      );
+      const founderProfile = await verifyFounderSession(uid).catch(() => null);
+
+      if (founderProfile) {
+        const stats = await getFounderStats(uid).catch(() => ({
+          totalFundingRaised: 0,
+          activeInvestorsCount: 0,
+        }));
+
+        await refreshUserData(uid);
+        registerEntrepreneur({
+          uid,
+          profileId: `FND-${uid.slice(0, 6).toUpperCase()}`,
+          name: founderProfile.fullName || fallback.name,
+          email: founderProfile.email || fallback.email,
+          phone: founderProfile.phone || "",
+          password: loginPassword,
+          paymentType: "bank",
+          bankAccountNumber: founderProfile.bankDetails?.iban || "",
+          isRegistered: true,
+          isApproved: true,
+          metrics: {
+            investorsViewedIdea: 0,
+            activeSampleRequests: 0,
+            unreadMessagesCount: 0,
+            totalFundingRaised: stats.totalFundingRaised,
+            activeInvestorsCount: stats.activeInvestorsCount,
+          } as any,
+        });
+        setRole("entrepreneur");
+        setIsLoggedIn(true);
+        navigate({ to: "/founder/dashboard" });
+        return;
+      }
+    } catch (founderErr) {
+      console.warn("Founder profile verification:", founderErr);
+    }
+
+    const userData = await refreshUserData(uid);
+    let role = userData?.role ?? (await getUserRole(uid));
+
+    // Claiming founder/entrepreneur without nested profile → deny
+    if (role === "founder" || role === "entrepreneur") {
+      throw new Error(
+        "Founder profile not found under founders/{uid}/profile. Access denied. Please complete founder registration.",
+      );
     }
 
     if (role === "investor") {
@@ -181,10 +215,7 @@ function LoginPage() {
       return;
     }
 
-    await hydrateEntrepreneurFromRtdb(uid, registerEntrepreneur, fallback);
-    setRole("entrepreneur");
-    setIsLoggedIn(true);
-    navigate({ to: "/founder/dashboard" });
+    throw new Error("No valid role profile found for this account.");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { onAuthStateChanged } from "firebase/auth";
-import { ref, update } from "firebase/database";
+import { ref, update, get } from "firebase/database";
 import { getRouter } from "./router";
 import { database, auth } from "./firebase";
 import { syncPlatformStatsToRtdb } from "./services/platformStatsService";
@@ -20,10 +20,18 @@ function App() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         const lastSeen = Date.now();
-        Promise.all([
-          update(ref(database, `users/${user.uid}`), { lastSeen }),
-          update(ref(database, `user_directory/${user.uid}`), { lastSeen }),
-        ])
+        // Founders: touch only founders/{uid}/profile — never recreate users/user_directory
+        get(ref(database, `founders/${user.uid}/profile`))
+          .then((snap) => {
+            if (snap.exists()) {
+              return update(ref(database, `founders/${user.uid}/profile`), { lastSeen });
+            }
+            // Non-founder roles may still use users / user_directory
+            return Promise.all([
+              update(ref(database, `users/${user.uid}`), { lastSeen }),
+              update(ref(database, `user_directory/${user.uid}`), { lastSeen }),
+            ]);
+          })
           .then(() => {
             console.log("✅ Firebase Auth + RTDB connected");
             return syncPlatformStatsToRtdb();

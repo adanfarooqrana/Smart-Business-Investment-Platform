@@ -118,7 +118,7 @@ export function LandingFAQ({ items }: LandingFAQProps) {
 
         {/* Admin monitor card */}
         <Link
-          to="/app/admin"
+          to="/admin/login"
           className="faq-admin-card group mt-4 flex items-center gap-4 rounded-2xl border border-slate-800/10 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-5 shadow-xl transition-all hover:scale-[1.01] hover:shadow-amber-500/20"
         >
           <div className="faq-admin-glow flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-[0_0_28px_rgba(251,191,36,0.45)]">

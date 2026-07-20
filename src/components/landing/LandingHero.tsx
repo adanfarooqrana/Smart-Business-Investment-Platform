@@ -1,7 +1,6 @@
 import { CheckCircle2 } from "lucide-react";
-import { HeroGrowthConstellation } from "@/components/landing/HeroGrowthConstellation";
+import { HeroGrowthDashboard } from "@/components/landing/HeroGrowthDashboard";
 import { HeroLaunchLink } from "@/components/landing/HeroLaunchLink";
-import { HeroAutoChatbot } from "@/components/landing/HeroAutoChatbot";
 import { ROTATING_PHRASES, useTypewriter } from "@/components/landing/landingUtils";
 
 export function LandingHero() {
@@ -47,12 +46,10 @@ export function LandingHero() {
             >
               Start your business now
             </HeroLaunchLink>
-
-            <HeroAutoChatbot />
           </div>
 
           <div className="relative flex w-full items-center justify-center lg:max-w-[50%]">
-            <HeroGrowthConstellation />
+            <HeroGrowthDashboard />
           </div>
         </div>
       </div>

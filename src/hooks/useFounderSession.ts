@@ -1,65 +1,60 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppState, type EntrepreneurLocalProfile } from "@/hooks/useAppState";
-import { getEntrepreneurRtdbProfile } from "@/services/firebaseService";
-import { getEntrepreneurProfile } from "@/services/entrepreneurService";
+import {
+  getFounderProfile,
+  getFounderStats,
+  verifyFounderSession,
+} from "@/services/founderFirebaseService";
 
 type RegisterEntrepreneur = (profile: Partial<EntrepreneurLocalProfile>) => void;
 
-/** Load founder profile from RTDB / Firestore into useAppState (localStorage). */
+/** Load founder profile from nested founders/{uid}/profile into useAppState. */
 export async function hydrateEntrepreneurFromRtdb(
   uid: string,
   registerEntrepreneur: RegisterEntrepreneur,
   fallback?: { name?: string; email?: string; password?: string },
 ): Promise<void> {
-  const rtdb = await getEntrepreneurRtdbProfile(uid).catch(() => null);
-  const firestore = await getEntrepreneurProfile(uid).catch(() => null);
-  const profile = rtdb ?? firestore;
+  try {
+    const profile = await getFounderProfile(uid);
+    if (!profile) {
+      throw new Error("Founder profile not found under founders/{uid}/profile.");
+    }
 
-  if (profile) {
-    const p = profile as Record<string, unknown>;
+    const stats = await getFounderStats(uid).catch(() => ({
+      totalFundingRaised: 0,
+      activeInvestorsCount: 0,
+    }));
+
     registerEntrepreneur({
       uid,
-      profileId: String(p.profileId ?? `ENT-${uid.slice(0, 8).toUpperCase()}`),
-      name: String(p.fullName ?? p.name ?? fallback?.name ?? ""),
-      email: String(p.email ?? fallback?.email ?? ""),
-      phone: String(p.phone ?? ""),
+      profileId: `FND-${uid.slice(0, 8).toUpperCase()}`,
+      name: String(profile.fullName || fallback?.name || ""),
+      email: String(profile.email || fallback?.email || ""),
+      phone: String(profile.phone || ""),
       password: fallback?.password,
-      cnicFrontUrl: (p.cnicFrontUrl as string) ?? (p.cnicFront as string),
-      paymentType: (p.paymentType as EntrepreneurLocalProfile["paymentType"]) ?? "bank",
-      bankAccountNumber: p.bankAccountNumber as string | undefined,
-      mobileWalletNumber: p.mobileWalletNumber as string | undefined,
+      paymentType: "bank",
+      bankAccountNumber: profile.bankDetails?.iban,
       isRegistered: true,
-      isApproved: Boolean(p.isApproved ?? p.isVerified ?? true),
-      metrics: (p.metrics as EntrepreneurLocalProfile["metrics"]) ?? {
+      isApproved: profile.status === "approved",
+      metrics: {
         investorsViewedIdea: 0,
         activeSampleRequests: 0,
         unreadMessagesCount: 0,
-      },
+        totalFundingRaised: stats.totalFundingRaised,
+        activeInvestorsCount: stats.activeInvestorsCount,
+      } as any,
     });
-    return;
+  } catch (error) {
+    console.error("hydrateEntrepreneurFromRtdb failed:", error);
+    throw error;
   }
-
-  registerEntrepreneur({
-    uid,
-    profileId: `ENT-${uid.slice(0, 8).toUpperCase()}`,
-    name: fallback?.name ?? fallback?.email?.split("@")[0] ?? "Founder",
-    email: fallback?.email ?? "",
-    password: fallback?.password,
-    phone: "",
-    isRegistered: true,
-    isApproved: true,
-    metrics: {
-      investorsViewedIdea: 0,
-      activeSampleRequests: 0,
-      unreadMessagesCount: 0,
-    },
-  });
 }
 
 /**
  * Ensures Firebase-authenticated founders have local profile state loaded
- * so the dashboard does not error or bounce after login.
+ * from founders/{uid}/profile so the dashboard mounts cleanly.
+ * Does not wipe an already-hydrated session on transient auth flickers.
  */
 export function useFounderSession() {
   const { currentUser, userData, loading: authLoading } = useAuth();
@@ -68,69 +63,74 @@ export function useFounderSession() {
   const hydratedUidRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (authLoading) {
-      setSessionReady(false);
-      return;
-    }
+    try {
+      // While auth is resolving, keep ready=true if we already hydrated this founder
+      if (authLoading) {
+        if (!(hydratedUidRef.current && entrepreneur?.isRegistered)) {
+          setSessionReady(false);
+        }
+        return;
+      }
 
-    const isFounderRole =
-      role === "entrepreneur" || userData?.role === "entrepreneur";
+      const isFounderRole =
+        role === "entrepreneur" ||
+        userData?.role === "founder" ||
+        userData?.role === "entrepreneur";
 
-    if (!isFounderRole) {
-      setSessionReady(true);
-      return;
-    }
+      if (!isFounderRole) {
+        setSessionReady(true);
+        return;
+      }
 
-    if (entrepreneur?.isRegistered && entrepreneur?.uid && (isLoggedIn || currentUser) && role === "entrepreneur") {
-      setSessionReady(true);
-      return;
-    }
+      if (
+        entrepreneur?.isRegistered &&
+        entrepreneur?.uid &&
+        (isLoggedIn || currentUser || hydratedUidRef.current === entrepreneur.uid) &&
+        role === "entrepreneur"
+      ) {
+        hydratedUidRef.current = entrepreneur.uid;
+        setSessionReady(true);
+        return;
+      }
 
-    const uid = currentUser?.uid ?? entrepreneur?.uid;
-    if (!uid) {
-      setSessionReady(true);
-      return;
-    }
+      const uid = currentUser?.uid ?? entrepreneur?.uid ?? hydratedUidRef.current;
+      if (!uid) {
+        // Soft wait — don't declare "unregistered" during flicker without uid
+        setSessionReady(true);
+        return;
+      }
 
-    const isFounderByAuth =
-      userData?.role === "entrepreneur" || role === "entrepreneur";
+      if (hydratedUidRef.current === uid && entrepreneur?.isRegistered) {
+        setSessionReady(true);
+        return;
+      }
 
-    if (!isFounderByAuth && !entrepreneur?.isRegistered) {
-      setSessionReady(true);
-      return;
-    }
+      hydratedUidRef.current = uid;
+      let cancelled = false;
 
-    if (hydratedUidRef.current === uid && entrepreneur?.isRegistered) {
-      setSessionReady(true);
-      return;
-    }
-
-    hydratedUidRef.current = uid;
-    let cancelled = false;
-
-    hydrateEntrepreneurFromRtdb(uid, registerEntrepreneur, {
-      name: userData?.name ?? entrepreneur?.name,
-      email: userData?.email ?? entrepreneur?.email ?? currentUser?.email ?? undefined,
-      password: entrepreneur?.password,
-    })
-      .catch((err) => {
-        console.warn("Founder session hydration failed:", err);
-        registerEntrepreneur({
-          uid,
-          profileId: `ENT-${uid.slice(0, 8).toUpperCase()}`,
-          name: userData?.name ?? entrepreneur?.name ?? currentUser?.email?.split("@")[0] ?? "Founder",
-          email: userData?.email ?? entrepreneur?.email ?? currentUser?.email ?? "",
-          isRegistered: true,
-          isApproved: true,
+      verifyFounderSession(uid)
+        .then(() =>
+          hydrateEntrepreneurFromRtdb(uid, registerEntrepreneur, {
+            name: userData?.name ?? entrepreneur?.name,
+            email: userData?.email ?? entrepreneur?.email ?? currentUser?.email ?? undefined,
+            password: entrepreneur?.password,
+          }),
+        )
+        .catch((err) => {
+          console.warn("Founder session hydration failed:", err);
+          // Keep prior local entrepreneur registration if hydrate fails mid-session
+        })
+        .finally(() => {
+          if (!cancelled) setSessionReady(true);
         });
-      })
-      .finally(() => {
-        if (!cancelled) setSessionReady(true);
-      });
 
-    return () => {
-      cancelled = true;
-    };
+      return () => {
+        cancelled = true;
+      };
+    } catch (error) {
+      console.error("useFounderSession effect error:", error);
+      setSessionReady(true);
+    }
   }, [
     authLoading,
     currentUser,
@@ -144,12 +144,24 @@ export function useFounderSession() {
     registerEntrepreneur,
   ]);
 
+  const hasCachedFounder =
+    !!hydratedUidRef.current ||
+    !!entrepreneur?.uid ||
+    !!entrepreneur?.isRegistered ||
+    !!currentUser?.uid;
+
   const isFounderRegistered =
     sessionReady &&
-    !authLoading &&
-    (isLoggedIn || !!currentUser) &&
-    (role === "entrepreneur" || userData?.role === "entrepreneur") &&
+    (isLoggedIn || !!currentUser || hasCachedFounder) &&
+    (role === "entrepreneur" ||
+      userData?.role === "founder" ||
+      userData?.role === "entrepreneur" ||
+      !!entrepreneur?.isRegistered) &&
     (entrepreneur?.isRegistered || !!entrepreneur?.uid || !!currentUser?.uid);
 
-  return { sessionReady: sessionReady && !authLoading, isFounderRegistered, entrepreneur };
+  return {
+    sessionReady: sessionReady && (!authLoading || hasCachedFounder),
+    isFounderRegistered,
+    entrepreneur,
+  };
 }

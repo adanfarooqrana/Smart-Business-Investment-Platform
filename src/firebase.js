@@ -14,20 +14,17 @@ import {
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// Project: smart-business-investment-app
-// Override via .env.local (VITE_FIREBASE_*) when you rotate API keys in Firebase Console.
+// Naya Firebase Configuration (Using .env variables first with fallbacks)
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? "AIzaSyDmSY2MM2KTC8O4gzafl6a16B3nVWGY46A",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? "smart-business-investment-app.firebaseapp.com",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? "AIzaSyDWMFY4PNfL5N3ZCDuQuQ949uztpWAwfRk",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? "fyp-final-d643b.firebaseapp.com",
   databaseURL:
     import.meta.env.VITE_FIREBASE_DATABASE_URL ??
-    "https://smart-business-investment-app-default-rtdb.firebaseio.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? "smart-business-investment-app",
-  storageBucket:
-    import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? "smart-business-investment-app.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? "16829036183",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID ?? "1:16829036183:web:3dbd9a022335554d691bd2",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID ?? "G-NXK9S2VQRC",
+    "https://fyp-final-d643b-default-rtdb.firebaseio.com", // Naye RTDB ka URL (agar active kiya ho)
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? "fyp-final-d643b",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? "fyp-final-d643b.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? "1077411823688",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID ?? "1:1077411823688:web:ccd7cac5edfea200ab987d",
 };
 
 const app = initializeApp(firebaseConfig);
@@ -37,16 +34,14 @@ export const auth = getAuth(app);
 export const db = getDatabase(app); // Realtime Database
 export const storage = getStorage(app);
 
-// Aliases / extra services kept so existing code keeps working:
-//  - `database` is used by RTDB callers (firebaseService, AuthContext, etc.)
-//  - `firestore` is used by Firestore callers (imported as `firestore as db`)
+// Aliases taake aap ka existing project bina kisi error ke chalta rahe
 export const database = db;
 export const firestore = getFirestore(app);
 
 export default app;
 
 // ============================================================================
-// Realtime Database helper functions (v9 modular)
+// Realtime Database helper functions (v9 modular) - Kept intact for compatibility
 // ============================================================================
 
 /** Overwrite the value at `path` with `data`. */

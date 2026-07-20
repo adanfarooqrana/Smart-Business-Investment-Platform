@@ -1,6 +1,9 @@
+import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Outlet, Link, createRootRouteWithContext, useRouter } from "@tanstack/react-router";
+import { Outlet, Link, createRootRouteWithContext, useRouter, useRouterState } from "@tanstack/react-router";
 import { AuthProvider } from "../contexts/AuthContext";
+import { OrbitLaunchTransition } from "@/components/ui/OrbitLaunchTransition";
+import { Sparkles, Briefcase, TrendingUp, Boxes, ShieldAlert, KeyRound } from "lucide-react";
 
 function NotFoundComponent() {
   return (
@@ -65,12 +68,42 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+function getLoaderConfig(pathname: string) {
+  if (pathname === "/") return { label: "Loading SmartBiz...", accent: "#f59e0b", icon: Sparkles };
+  if (pathname.includes("/register")) return { label: "Opening Registration...", accent: "#f59e0b", icon: KeyRound };
+  if (pathname.includes("/login")) return { label: "Opening Sign In...", accent: "#f59e0b", icon: KeyRound };
+  if (pathname.includes("/admin")) return { label: "Opening Admin Panel...", accent: "#ef4444", icon: ShieldAlert };
+  if (pathname.includes("/investor")) return { label: "Opening Investor Desk...", accent: "#10b981", icon: TrendingUp };
+  if (pathname.includes("/wholesale")) return { label: "Opening Wholesale Hub...", accent: "#f97316", icon: Boxes };
+  return { label: "Opening Workspace...", accent: "#f59e0b", icon: Briefcase };
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const routerState = useRouterState();
+  const currentPath = routerState.location.pathname;
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [currentPath]);
+
+  const loader = getLoaderConfig(currentPath);
 
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        {loading && (
+          <OrbitLaunchTransition
+            accent={loader.accent}
+            label={loader.label}
+            icon={loader.icon}
+          />
+        )}
         <Outlet />
       </AuthProvider>
     </QueryClientProvider>

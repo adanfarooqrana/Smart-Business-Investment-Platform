@@ -26,16 +26,9 @@ import {
   resolveEntrepreneurUidForIdea,
   type RtdbDirectMessage,
 } from "@/services/messageService";
+import { sendUnifiedChatMessage } from "@/services/investorCoreService";
+import { sendInvestorQueryToFounder } from "@/services/founderFirebaseService";
 import { toast } from "sonner";
-
-const AGREEMENT_CLAUSES = [
-  "Section 1 — Parties & Investment Amount",
-  "Section 2 — Equity & Ownership Rights",
-  "Section 3 — Escrow & Milestone Release",
-  "Section 4 — Representations & Warranties",
-  "Section 5 — Governing Law & Dispute Resolution",
-  "Other clause (specify below)",
-];
 
 type InvestorFounderMessengerProps = {
   idea: StartupIdea;
@@ -66,7 +59,6 @@ export function InvestorFounderMessenger({
   const [flying, setFlying] = useState(false);
   const [waitMinimized, setWaitMinimized] = useState(false);
   const [msgType, setMsgType] = useState<InvestorMessageType>(defaultType);
-  const [issueSection, setIssueSection] = useState(AGREEMENT_CLAUSES[2]);
   const [issuePoint, setIssuePoint] = useState("");
   const [investorConcern, setInvestorConcern] = useState("");
   const [entrepreneurUid, setEntrepreneurUid] = useState<string | null>(
@@ -74,6 +66,8 @@ export function InvestorFounderMessenger({
   );
   const [rtdbMessages, setRtdbMessages] = useState<RtdbDirectMessage[]>([]);
   const [showThread, setShowThread] = useState(false);
+
+  const allowAgreementObjection = stage === "Stage 3";
 
   const dialogOpen = composeOpen ?? open;
   const setDialogOpen = (v: boolean) => {
@@ -113,8 +107,20 @@ export function InvestorFounderMessenger({
   }, [showThread, conversation, investorUid, entrepreneurUid]);
 
   useEffect(() => {
-    if (composeOpen) setMsgType(defaultType);
-  }, [composeOpen, defaultType]);
+    if (composeOpen) {
+      const next =
+        defaultType === "agreement_objection" && allowAgreementObjection
+          ? "agreement_objection"
+          : "general_query";
+      setMsgType(next);
+    }
+  }, [composeOpen, defaultType, allowAgreementObjection]);
+
+  useEffect(() => {
+    if (!allowAgreementObjection && msgType === "agreement_objection") {
+      setMsgType("general_query");
+    }
+  }, [allowAgreementObjection, msgType]);
 
   const handleSend = async () => {
     if (!issuePoint.trim() || !investorConcern.trim()) return;
@@ -127,17 +133,26 @@ export function InvestorFounderMessenger({
       return;
     }
 
+    const effectiveType: InvestorMessageType =
+      msgType === "agreement_objection" && allowAgreementObjection
+        ? "agreement_objection"
+        : "general_query";
+
     setFlying(true);
     const formatted = buildInvestorMessageFormat({
       startupTitle: idea.startupTitle,
       founderName: idea.founderName,
       investorName,
-      stage: msgType === "agreement_objection" ? "Stage 4" : stage,
-      type: msgType,
-      issueSection: msgType === "agreement_objection" ? issueSection : undefined,
+      stage: effectiveType === "agreement_objection" ? "Stage 3" : stage,
+      type: effectiveType,
       issuePoint: issuePoint.trim(),
       investorConcern: investorConcern.trim(),
     });
+
+    const stageContext =
+      effectiveType === "agreement_objection"
+        ? "Agreement Objection"
+        : `${stage} - General Question`;
 
     try {
       await sendDirectMessage({
@@ -147,14 +162,37 @@ export function InvestorFounderMessenger({
         text: formatted,
       });
 
+      // Unified room: chats/{pitchId}_{investorId}_{founderId}/messages
+      await sendUnifiedChatMessage(
+        idea.id,
+        investorUid,
+        entrepreneurUid,
+        investorUid,
+        formatted,
+        stageContext,
+        {
+          senderName: investorName,
+          founderName: idea.founderName || "",
+          startupTitle: idea.startupTitle || idea.id,
+          investorName,
+        },
+      );
+
+      await sendInvestorQueryToFounder({
+        founderId: entrepreneurUid,
+        pitchId: idea.id,
+        investorId: investorUid,
+        investorName,
+        messageText: formatted,
+      });
+
       const entry = sendInvestorMessage({
         ideaId: idea.id,
         startupTitle: idea.startupTitle,
         founderName: idea.founderName,
         investorName,
-        stage: msgType === "agreement_objection" ? "Stage 4" : stage,
-        type: msgType,
-        issueSection: msgType === "agreement_objection" ? issueSection : undefined,
+        stage: effectiveType === "agreement_objection" ? "Stage 3" : stage,
+        type: effectiveType,
         issuePoint: issuePoint.trim(),
         investorConcern: investorConcern.trim(),
         formattedPayload: formatted,
@@ -304,35 +342,20 @@ export function InvestorFounderMessenger({
               >
                 General Question
               </button>
-              <button
-                type="button"
-                onClick={() => setMsgType("agreement_objection")}
-                className={`flex-1 rounded-xl border px-3 py-2 text-[10px] font-bold transition-all flex items-center justify-center gap-1 ${
-                  msgType === "agreement_objection"
-                    ? "border-amber-400 bg-amber-50 text-amber-800"
-                    : "border-slate-200 text-slate-500"
-                }`}
-              >
-                <AlertTriangle className="h-3 w-3" /> Agreement Objection
-              </button>
-            </div>
-
-            {msgType === "agreement_objection" && (
-              <div>
-                <Label className="text-xs">Agreement clause in question</Label>
-                <select
-                  value={issueSection}
-                  onChange={(e) => setIssueSection(e.target.value)}
-                  className="mt-1 flex h-10 w-full rounded-xl border border-input bg-background px-3 text-xs"
+              {allowAgreementObjection && (
+                <button
+                  type="button"
+                  onClick={() => setMsgType("agreement_objection")}
+                  className={`flex-1 rounded-xl border px-3 py-2 text-[10px] font-bold transition-all flex items-center justify-center gap-1 ${
+                    msgType === "agreement_objection"
+                      ? "border-amber-400 bg-amber-50 text-amber-800"
+                      : "border-slate-200 text-slate-500"
+                  }`}
                 >
-                  {AGREEMENT_CLAUSES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+                  <AlertTriangle className="h-3 w-3" /> Agreement Objection
+                </button>
+              )}
+            </div>
 
             <div>
               <Label className="text-xs">Issue point (short summary)</Label>
@@ -364,9 +387,14 @@ export function InvestorFounderMessenger({
                     startupTitle: idea.startupTitle,
                     founderName: idea.founderName,
                     investorName,
-                    stage: msgType === "agreement_objection" ? "Stage 4" : stage,
-                    type: msgType,
-                    issueSection: msgType === "agreement_objection" ? issueSection : undefined,
+                    stage:
+                      msgType === "agreement_objection" && allowAgreementObjection
+                        ? "Stage 3"
+                        : stage,
+                    type:
+                      msgType === "agreement_objection" && allowAgreementObjection
+                        ? "agreement_objection"
+                        : "general_query",
                     issuePoint: issuePoint || "…",
                     investorConcern: investorConcern || "…",
                   })}

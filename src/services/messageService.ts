@@ -59,7 +59,6 @@ export type InvestorThread = {
   lastMessage: string;
   lastMessageAt: number;
   unreadCount: number;
-  aiSummary: string;
   hasSampleRequest: boolean;
   samplePending: boolean;
   sampleRequest?: SampleTrackingEntry;
@@ -72,22 +71,6 @@ export function investorIdFromName(name: string): string {
 
 export function threadIdFor(entrepreneurUid: string, investorId: string, ideaId?: string): string {
   return `${entrepreneurUid}_${investorId}${ideaId ? `_${ideaId}` : ""}`;
-}
-
-export function generateAiSummary(investorName: string, lastText: string): string {
-  const t = lastText.toLowerCase();
-  if (t.includes("sample") || t.includes("product"))
-    return `${investorName} requested a product sample for review`;
-  if (t.includes("equity") || t.includes("%"))
-    return `${investorName} negotiating equity terms — respond promptly`;
-  if (t.includes("roi") || t.includes("return"))
-    return `${investorName} questioning ROI projections`;
-  if (t.includes("agreement") || t.includes("contract"))
-    return `${investorName} raised agreement / legal concerns`;
-  if (t.includes("tracking") || t.includes("delivery"))
-    return `${investorName} following up on sample delivery`;
-  const snippet = lastText.slice(0, 60).trim();
-  return snippet.length < lastText.length ? `${snippet}…` : snippet || `${investorName} sent a new message`;
 }
 
 export async function sendFirebaseMessage(
@@ -239,7 +222,6 @@ export function buildThreadsFromMessages(
         lastMessage: msg.text,
         lastMessageAt: Number(msg.createdAt),
         unreadCount: 0,
-        aiSummary: "",
         hasSampleRequest: !!sample || msg.type === "sample_request",
         samplePending: sample?.status === "pending",
         sampleRequest: sample,
@@ -258,7 +240,6 @@ export function buildThreadsFromMessages(
 
   for (const thread of map.values()) {
     thread.messages.sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
-    thread.aiSummary = generateAiSummary(thread.investorName, thread.lastMessage);
     if (thread.ideaId && sampleByIdea[thread.ideaId]) {
       const s = sampleByIdea[thread.ideaId][thread.investorId];
       if (s) {

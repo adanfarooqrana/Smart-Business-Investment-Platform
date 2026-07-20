@@ -1918,3 +1918,32 @@
   0%, 100% { box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.2), 0 0 0 rgba(245, 158, 11, 0); }
   50% { box-shadow: 0 20px 30px -5px rgba(15, 23, 42, 0.25), 0 0 22px rgba(245, 158, 11, 0.22); }
 }
+
+/* Style the scrollbar for the dark sidebar so it blends in */
+[data-sidebar="sidebar"]::-webkit-scrollbar,
+[data-sidebar="sidebar"] *::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+[data-sidebar="sidebar"]::-webkit-scrollbar-track,
+[data-sidebar="sidebar"] *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[data-sidebar="sidebar"]::-webkit-scrollbar-thumb,
+[data-sidebar="sidebar"] *::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+
+[data-sidebar="sidebar"]::-webkit-scrollbar-thumb:hover,
+[data-sidebar="sidebar"] *::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+[data-sidebar="sidebar"],
+[data-sidebar="sidebar"] * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}

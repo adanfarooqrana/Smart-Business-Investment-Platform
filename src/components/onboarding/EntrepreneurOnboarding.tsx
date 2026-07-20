@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Lightbulb,
@@ -13,26 +13,57 @@ import {
   ShieldCheck,
   ArrowRight,
   ArrowLeft,
-  Target,
-  Rocket,
-  Sparkles,
+  IdCard,
+  CreditCard,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { doc, setDoc } from "firebase/firestore";
+import { ref, update as rtdbUpdate } from "firebase/database";
 import type { EntrepreneurProfile } from "@/services/entrepreneurService";
-import { firestore } from "@/firebase";
+import { auth, database } from "@/firebase";
 import { useAppState } from "@/hooks/useAppState";
-import { useAuth } from "@/contexts/AuthContext";
 import { CnicFaceVerify, type CnicFaceResult } from "@/components/verification/CnicFaceVerify";
-import { PITCH_CATEGORIES } from "@/lib/investorPitchSchema";
+import { checkDuplicateFounderCredentials, initializeFounderProfile, FOUNDER_PROFILE } from "@/services/founderFirebaseService";
+import { submitPendingKycReview } from "@/services/adminKycService";
+import { KycPendingGate } from "@/components/kyc/KycPendingGate";
+import { EmailVerificationGate } from "@/components/auth/EmailVerificationGate";
+import {
+  createEmailPasswordAndSendVerification,
+  friendlyIdentityError,
+} from "@/services/identityVerificationService";
 
 const BG_VIDEO = "/videos/8716432-uhd_3840_2160_25fps.mp4";
 const BG_VIDEO_FALLBACK = "/videos/business-signup.mp4";
 const BG_VIDEO_FALLBACK_2 = "/videos/investor-signup.mp4";
 
-const STEPS = ["Your Vision", "Account", "CNIC & Face Scan", "Bank Account", "Verified"];
+const STEPS = [
+  "Account & Email",
+  "CNIC, Banking & KYC",
+  "Admin Approval",
+];
+
+const PAKISTAN_BANKS = [
+  "HBL — Habib Bank Limited",
+  "UBL — United Bank Limited",
+  "MCB Bank",
+  "Allied Bank",
+  "Meezan Bank",
+  "Bank Alfalah",
+  "Askari Bank",
+  "Standard Chartered Pakistan",
+  "Faysal Bank",
+  "JS Bank",
+  "Bank of Punjab",
+  "Samba Bank",
+  "Dubai Islamic Bank",
+  "Other / Not listed",
+] as const;
+
+interface ExtendedEntrepreneurProfile extends EntrepreneurProfile {
+  cnicNumber?: string;
+  status?: string;
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
@@ -46,51 +77,35 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
-function friendlyFirebaseError(err: unknown): string {
-  const code =
-    err && typeof err === "object" && "code" in err ? String((err as { code: string }).code) : "";
-  if (code === "auth/email-already-in-use") {
-    return "Yeh email pehle se registered hai. Login karein ya nayi email use karein.";
-  }
-  if (code === "auth/weak-password") {
-    return "Password kam az kam 6 characters ka hona chahiye.";
-  }
-  if (code === "auth/invalid-email") {
-    return "Email format sahi nahi hai.";
-  }
-  if (code === "auth/network-request-failed") {
-    return "Internet / Firebase connection fail. Dev server restart karke dubara try karein.";
-  }
-  if (err instanceof Error) return err.message;
-  return "Registration failed. Please try again.";
-}
-
 type FormState = {
-  ideaVision: string;
-  ideaInterest: string;
-  founderGoals: string;
   fullName: string;
-  phone: string;
   email: string;
   password: string;
+  cnicNumber: string;
+  bankName: string;
+  accountTitle: string;
   bankAccountNumber: string;
+  phone: string;
 };
 
 export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
   const navigate = useNavigate();
-  const { signupUser } = useAuth();
   const { registerEntrepreneur: registerLocal } = useAppState();
   const [showIntro, setShowIntro] = useState(true);
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [submitPhase, setSubmitPhase] = useState("");
-  const [createdProfile, setCreatedProfile] = useState<EntrepreneurProfile | null>(null);
+  const [submitDone, setSubmitDone] = useState(false);
+  const [pendingUid, setPendingUid] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [verify, setVerify] = useState<CnicFaceResult | null>(null);
   const [videoOk, setVideoOk] = useState(true);
   const [videoSrc, setVideoSrc] = useState(BG_VIDEO);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  const [awaitingEmail, setAwaitingEmail] = useState(false);
+  const [creatingAccount, setCreatingAccount] = useState(false);
 
   const handleVideoError = () => {
     if (videoSrc === BG_VIDEO) {
@@ -103,29 +118,58 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
   };
 
   const [form, setForm] = useState<FormState>({
-    ideaVision: "",
-    ideaInterest: PITCH_CATEGORIES[0],
-    founderGoals: "",
     fullName: "",
-    phone: "",
     email: "",
     password: "",
+    cnicNumber: "",
+    bankName: "",
+    accountTitle: "",
     bankAccountNumber: "",
+    phone: "",
   });
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  const handleEmailVerified = useCallback(() => {
+    setAwaitingEmail(false);
+    setStep(1);
+  }, []);
+
   const canNext = () => {
     if (step === 0) {
-      return form.ideaVision.trim() && form.ideaInterest && form.founderGoals.trim();
+      return form.fullName.trim() && form.email.trim() && form.password.length >= 6;
     }
     if (step === 1) {
-      return form.fullName && form.phone && form.email && form.password.length >= 6;
+      return (
+        !!form.cnicNumber.trim() &&
+        !!form.bankName.trim() &&
+        !!form.accountTitle.trim() &&
+        !!form.bankAccountNumber.trim() &&
+        !!form.phone.trim() &&
+        !!verify &&
+        verify.faceMatchScore >= 70
+      );
     }
-    if (step === 2) return !!verify && verify.faceMatchScore >= 90;
-    if (step === 3) return form.bankAccountNumber.length >= 8;
     return true;
+  };
+
+  const handleCreateAccountAndSendEmail = async () => {
+    if (!canNext()) return;
+    setError("");
+    setCreatingAccount(true);
+    try {
+      await createEmailPasswordAndSendVerification({
+        email: form.email.trim(),
+        password: form.password,
+        fullName: form.fullName.trim(),
+      });
+      setAwaitingEmail(true);
+    } catch (err: unknown) {
+      setError(friendlyIdentityError(err));
+    } finally {
+      setCreatingAccount(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -133,33 +177,37 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
     setError("");
     setSubmitting(true);
     setVerifying(true);
-    setSubmitPhase("Account bana rahe hain...");
+    setSubmitPhase("Validating unique credentials...");
     try {
-      const user = await withTimeout(
-        signupUser({
-          email: form.email,
-          password: form.password,
-          name: form.fullName,
-          role: "entrepreneur",
-          profile: {
-            phone: form.phone,
-            paymentType: "bank",
-            bankAccountNumber: form.bankAccountNumber,
-            ideaVision: form.ideaVision.trim(),
-            ideaInterest: form.ideaInterest,
-            founderGoals: form.founderGoals.trim(),
-          },
-        }),
-        45000,
-        "Account signup",
-      );
+      const user = auth.currentUser;
+      if (!user?.uid) {
+        throw new Error("Session expired. Please complete email signup again.");
+      }
+      if (!user.emailVerified) {
+        throw new Error("Email verify karein pehle.");
+      }
+      if (!form.phone.trim()) {
+        throw new Error("Phone number is required.");
+      }
+
+      await checkDuplicateFounderCredentials(form.email, form.cnicNumber, form.phone);
 
       const uid = user.uid;
-      const profileId = `ENT-${uid.slice(0, 8).toUpperCase()}`;
-      const now = Date.now();
+      const profileId = `FND-${uid.slice(0, 6).toUpperCase()}`;
+
+      setSubmitPhase("Founder profile initialize ho raha hai...");
+      await initializeFounderProfile(uid, {
+        fullName: form.fullName.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim(),
+        cnicNumber: form.cnicNumber.trim(),
+        accountTitle: form.accountTitle.trim(),
+        bankName: form.bankName.trim(),
+        iban: form.bankAccountNumber.trim(),
+      });
 
       setSubmitPhase("CNIC photos upload ho rahi hain...");
-      const { uploadBase64Image, saveBusinessProfile } = await import(
+      const { uploadBase64Image } = await import(
         "@/services/firebaseService"
       );
 
@@ -176,94 +224,73 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
         }
       };
 
-      const [cnicFrontUrl, cnicBackUrl, liveSelfieUrl] = await Promise.all([
+      const [cnicFrontUrl, cnicBackUrl] = await Promise.all([
         uploadOne("cnic-front.jpg", verify.cnicFront),
         uploadOne("cnic-back.jpg", verify.cnicBack),
-        uploadOne("live-selfie.jpg", verify.liveSelfie),
       ]);
+      await uploadOne("live-selfie.jpg", verify.liveSelfie);
 
-      setSubmitPhase("Profile backend par save ho rahi hai...");
-      await withTimeout(
-        saveBusinessProfile(uid, {
-          uid,
-          name: form.fullName,
-          email: form.email,
-          phone: form.phone,
-          about: form.ideaVision.trim(),
-          category: form.ideaInterest,
-          registerNumber: form.bankAccountNumber,
-          isRegistered: true,
-          isApproved: verify.faceMatchScore >= 90,
-          score: verify.faceMatchScore,
-        }),
-        30000,
-        "Business profile save",
-      );
+      // Persist KYC assets into nested founders/{uid}/profile (pending admin approval)
+      await rtdbUpdate(ref(database, FOUNDER_PROFILE(uid)), {
+        cnicFrontUrl: cnicFrontUrl || "",
+        cnicBackUrl: cnicBackUrl || "",
+        faceMatchScore: verify.faceMatchScore || 0,
+        matchConfidenceScore: verify.matchConfidenceScore || verify.faceMatchScore || 0,
+        status: "pending",
+        kycStatus: "pending",
+        isApproved: false,
+      });
 
-      const profile: EntrepreneurProfile = {
+      const frontData = cnicFrontUrl || verify.cnicFront || "";
+      const backData = cnicBackUrl || verify.cnicBack || "";
+      const selfieData = verify.liveSelfie || "";
+
+      await submitPendingKycReview({
+        uid,
+        role: "founder",
+        fullName: form.fullName.trim(),
+        email: form.email.trim(),
+        phoneNumber: form.phone.trim(),
+        cnic: form.cnicNumber.trim(),
+        bankName: form.bankName.trim(),
+        accountTitle: form.accountTitle.trim(),
+        accountNumber: form.bankAccountNumber.trim(),
+        cnicFrontUrl: frontData,
+        cnicBackUrl: backData,
+        liveSelfieUrl: selfieData,
+        matchConfidenceScore: verify.matchConfidenceScore || verify.faceMatchScore || 0,
+      });
+
+      setSubmitPhase("Done, wait for admin approval");
+      setSubmitDone(true);
+      registerLocal({
         uid,
         profileId,
-        fullName: form.fullName,
+        name: form.fullName,
         email: form.email,
         phone: form.phone,
-        cnicFrontUrl,
-        cnicBackUrl,
-        liveSelfieUrl,
-        faceMatchScore: verify.faceMatchScore,
-        ideaVision: form.ideaVision.trim(),
-        ideaInterest: form.ideaInterest,
-        founderGoals: form.founderGoals.trim(),
+        password: form.password,
+        cnicFrontUrl: cnicFrontUrl || "",
         paymentType: "bank",
         bankAccountNumber: form.bankAccountNumber,
-        isVerified: verify.faceMatchScore >= 90,
-        isApproved: verify.faceMatchScore >= 90,
         metrics: {
           investorsViewedIdea: 0,
           activeSampleRequests: 0,
           unreadMessagesCount: 0,
         },
-        theme: { primary: "#FFA500", secondary: "#FFD700", background: "#FFF8E1" },
-        createdAt: now,
-      };
-
-      const { syncEntrepreneurToRtdb } = await import("@/services/backendSyncService");
-      await withTimeout(syncEntrepreneurToRtdb(profile), 30000, "Entrepreneur sync");
-
-      await setDoc(doc(firestore, "entrepreneurs", uid), {
-        ...profile,
-        createdAt: now,
-      }).catch((err) => {
-        console.warn("Firestore entrepreneur mirror skipped:", err);
-      });
-
-      registerLocal({
-        uid: profile.uid,
-        profileId: profile.profileId,
-        name: profile.fullName,
-        email: profile.email,
-        phone: profile.phone,
-        password: form.password,
-        cnicFrontUrl: profile.cnicFrontUrl,
-        paymentType: "bank",
-        bankAccountNumber: profile.bankAccountNumber,
-        metrics: profile.metrics,
         isRegistered: true,
-        isApproved: profile.isApproved,
+        isApproved: false,
       });
 
-      setCreatedProfile(profile);
-      setStep(4);
+      setPendingUid(uid);
+      setStep(2);
     } catch (err: unknown) {
-      setError(friendlyFirebaseError(err));
+      setError(friendlyIdentityError(err));
     } finally {
       setSubmitting(false);
       setVerifying(false);
       setSubmitPhase("");
     }
-  };
-
-  const launchDashboard = () => {
-    navigate({ to: "/founder/dashboard" });
   };
 
   return (
@@ -328,7 +355,7 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
                 Apni startup idea ko investors tak le jayein
               </h1>
               <p className="mb-8 max-w-md text-sm text-white/90 md:text-base">
-                Pehle video dekhein, phir vision, CNIC verification aur bank account se apna
+                Pehle video dekhein, phir CNIC verification aur bank account se apna
                 verified founder profile banayein — sab data backend par save hoga.
               </p>
               <Button
@@ -361,292 +388,296 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
           />
 
           <div className="relative z-10 mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-6 py-8">
-        <div className="mb-6 flex items-center justify-between border-b border-[#FFA500]/30 pb-4">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-white shadow-lg"
-              style={{ background: "linear-gradient(135deg, #FFA500, #FFD700)" }}
-            >
-              <Lightbulb className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#FFA500]">
-                Entrepreneur / Founder
-              </p>
-              <h2 className="font-display text-lg font-bold text-slate-900">{STEPS[step]}</h2>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onBack}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-slate-500 shadow hover:text-slate-900"
-            aria-label="Back to journey"
-          >
-            <Undo2 className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="mb-6 flex items-center gap-1.5">
-          {STEPS.map((s, i) => (
-            <div
-              key={s}
-              className="h-2 rounded-full transition-all"
-              style={{
-                width: i === step ? 32 : 8,
-                backgroundColor: i <= step ? "#FFA500" : "#FFE082",
-              }}
-              title={s}
-            />
-          ))}
-        </div>
-
-        <div className="rounded-3xl border border-[#FFA500]/25 bg-white/95 p-6 shadow-2xl shadow-[#FFA500]/15 backdrop-blur-md md:p-8">
-          {error && (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-
-          {step === 0 && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-3 duration-300">
-              <p className="rounded-xl bg-[#FFF8E1] px-3 py-2 text-xs text-slate-600">
-                Pehle apni idea, interest aur goals share karein — yeh investor desk par aapki
-                founder story ban jati hai.
-              </p>
-              <div className="space-y-1.5">
-                <Label className="flex items-center gap-1">
-                  <Rocket className="h-3.5 w-3.5" /> Startup Idea / Vision{" "}
-                  <span className="text-red-500">*</span>
-                </Label>
-                <textarea
-                  className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#FFA500]"
-                  value={form.ideaVision}
-                  onChange={(e) => set("ideaVision", e.target.value)}
-                  placeholder="e.g. Organic rice export startup serving Gulf markets..."
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="flex items-center gap-1">
-                  <Sparkles className="h-3.5 w-3.5" /> Area of Interest / Category{" "}
-                  <span className="text-red-500">*</span>
-                </Label>
-                <select
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#FFA500]"
-                  value={form.ideaInterest}
-                  onChange={(e) => set("ideaInterest", e.target.value)}
+            <div className="mb-6 flex items-center justify-between border-b border-[#FFA500]/30 pb-4">
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-xl text-white shadow-lg"
+                  style={{ background: "linear-gradient(135deg, #FFA500, #FFD700)" }}
                 >
-                  {PITCH_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+                  <Lightbulb className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#FFA500]">
+                    Entrepreneur / Founder
+                  </p>
+                  <h2 className="font-display text-lg font-bold text-slate-900">{STEPS[step]}</h2>
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="flex items-center gap-1">
-                  <Target className="h-3.5 w-3.5" /> Founder Goals (12–24 months){" "}
-                  <span className="text-red-500">*</span>
-                </Label>
-                <textarea
-                  className="flex min-h-[90px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#FFA500]"
-                  value={form.founderGoals}
-                  onChange={(e) => set("founderGoals", e.target.value)}
-                  placeholder="Funding target, growth milestones, investor partnership goals..."
+              <button
+                type="button"
+                onClick={onBack}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-slate-500 shadow hover:text-slate-900"
+                aria-label="Back to journey"
+              >
+                <Undo2 className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mb-6 flex items-center gap-1.5">
+              {STEPS.map((s, i) => (
+                <div
+                  key={s}
+                  className="h-2 rounded-full transition-all"
+                  style={{
+                    width: i === step ? 32 : 8,
+                    backgroundColor: i <= step ? "#FFA500" : "#FFE082",
+                  }}
+                  title={s}
                 />
-              </div>
+              ))}
             </div>
-          )}
 
-          {step === 1 && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-3 duration-300">
-              <p className="text-xs text-slate-500">
-                Account credentials — CNIC aur face scan agle step mein hoga.
-              </p>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label className="flex items-center gap-1">
-                    <User className="h-3.5 w-3.5" /> Full Name <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    value={form.fullName}
-                    onChange={(e) => set("fullName", e.target.value)}
-                    placeholder="e.g. Ali Hassan"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="flex items-center gap-1">
-                    <Phone className="h-3.5 w-3.5" /> Phone <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    type="tel"
-                    value={form.phone}
-                    onChange={(e) => set("phone", e.target.value)}
-                    placeholder="+92 300 1234567"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="flex items-center gap-1">
-                    <Mail className="h-3.5 w-3.5" /> Email <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => set("email", e.target.value)}
-                    placeholder="founder@startup.pk"
-                  />
-                </div>
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label className="flex items-center gap-1">
-                    <Lock className="h-3.5 w-3.5" /> Password <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    type="password"
-                    value={form.password}
-                    onChange={(e) => set("password", e.target.value)}
-                    placeholder="Minimum 6 characters"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="animate-in fade-in slide-in-from-bottom-3 duration-300">
-              <p className="mb-4 text-xs text-slate-500">
-                CNIC front &amp; back upload karein, phir live camera se face scan — system CNIC photo
-                se match karke verify karega (jaise wholesaler / investor flow).
-              </p>
-              <CnicFaceVerify
-                accent="amber"
-                onComplete={(result) => setVerify(result)}
-              />
-              {verify && (
-                <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-700">
-                  <CheckCircle2 className="mr-1 inline h-4 w-4" />
-                  Identity verified — Face match {verify.faceMatchScore}%
+            <div className="rounded-3xl border border-[#FFA500]/25 bg-white/95 p-6 shadow-2xl shadow-[#FFA500]/15 backdrop-blur-md md:p-8">
+              {error && (
+                <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {error}
                 </div>
               )}
-            </div>
-          )}
 
-          {step === 3 && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-3 duration-300">
-              <p className="text-xs text-slate-500">
-                Sirf bank account details — investor payouts yahan receive hongi.
-              </p>
-              <div className="rounded-2xl border border-[#FFA500]/30 bg-[#FFF8E1]/60 p-4">
-                <div className="mb-3 flex items-center gap-2 text-sm font-bold text-[#FFA500]">
-                  <Landmark className="h-4 w-4" /> Bank Account (Required)
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Bank Account Number / IBAN <span className="text-red-500">*</span></Label>
-                  <Input
-                    value={form.bankAccountNumber}
-                    onChange={(e) => set("bankAccountNumber", e.target.value)}
-                    placeholder="e.g. PK00XXXX00000000000000"
-                  />
-                </div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-500">
-                <p className="font-semibold text-slate-700">Founder summary saved:</p>
-                <p className="mt-1 line-clamp-2">{form.ideaVision}</p>
-                <p className="mt-1 text-[#FFA500]">{form.ideaInterest}</p>
-              </div>
-            </div>
-          )}
-
-          {step === 4 && createdProfile && (
-            <div className="space-y-6 text-center animate-in zoom-in-95 duration-400">
-              <div
-                className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl text-white shadow-lg"
-                style={{ background: "linear-gradient(135deg, #FFA500, #FFD700)" }}
-              >
-                <ShieldCheck className="h-8 w-8" />
-              </div>
-              <div>
-                <h3 className="font-display text-2xl font-bold text-slate-900">Profile Verified</h3>
-                <p className="mt-2 text-sm text-slate-500">
-                  Welcome, {createdProfile.fullName}! Your founder dashboard is ready.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-[#FFA500]/30 bg-[#FFF8E1] p-4 text-left font-mono text-xs space-y-2">
-                <div className="flex items-center gap-2 text-emerald-600">
-                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                  <span>Profile ID: {createdProfile.profileId}</span>
-                </div>
-                <div className="flex items-center gap-2 text-emerald-600">
-                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                  <span>CNIC front &amp; back verified</span>
-                </div>
-                <div className="flex items-center gap-2 text-emerald-600">
-                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                  <span>Live face scan matched ({createdProfile.faceMatchScore}%)</span>
-                </div>
-                <div className="flex items-center gap-2 text-emerald-600">
-                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                  <span>Bank account linked</span>
-                </div>
-                {createdProfile.ideaVision && (
-                  <div className="flex items-start gap-2 text-[#FFA500] pt-1">
-                    <Rocket className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                    <span className="font-sans normal-case">{createdProfile.ideaVision}</span>
-                  </div>
-                )}
-              </div>
-              <Button
-                onClick={launchDashboard}
-                className="w-full text-white font-bold"
-                style={{ background: "linear-gradient(135deg, #FFA500, #FFD700)" }}
-              >
-                Launch Founder Dashboard <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
-          )}
-
-          {step < 4 && (
-            <div className="mt-6 flex items-center justify-between gap-3 border-t border-[#FFA500]/20 pt-4">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => (step === 0 ? setShowIntro(true) : setStep((s) => s - 1))}
-                className="rounded-full"
-              >
-                <ArrowLeft className="mr-1 h-4 w-4" /> Back
-              </Button>
-
-              {step < 3 ? (
-                <Button
-                  type="button"
-                  disabled={!canNext()}
-                  onClick={() => setStep((s) => s + 1)}
-                  className="rounded-full text-white"
-                  style={{ background: "linear-gradient(135deg, #FFA500, #FFD700)" }}
-                >
-                  Continue <ArrowRight className="ml-1 h-4 w-4" />
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  disabled={!canNext() || submitting}
-                  onClick={handleSubmit}
-                  className="rounded-full text-white"
-                  style={{ background: "linear-gradient(135deg, #FFA500, #FFD700)" }}
-                >
-                  {verifying ? (
-                    <>
-                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                      {submitPhase || "Verifying & Creating Profile..."}
-                    </>
+              {/* STEP 0: ACCOUNT & EMAIL */}
+              {step === 0 && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-3 duration-300">
+                  {awaitingEmail ? (
+                    <EmailVerificationGate
+                      email={form.email.trim()}
+                      onVerified={handleEmailVerified}
+                      accentClassName="text-amber-600"
+                    />
                   ) : (
                     <>
-                      Verify & Create Profile <ShieldCheck className="ml-1 h-4 w-4" />
+                      <p className="text-xs text-slate-500">
+                        Create your account with email and password. We will send a verification
+                        link before profile details.
+                      </p>
+                      <div className="space-y-1.5">
+                        <Label className="flex items-center gap-1">
+                          <User className="h-3.5 w-3.5" /> Full Name{" "}
+                          <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          value={form.fullName}
+                          onChange={(e) => set("fullName", e.target.value)}
+                          placeholder="Ali Hassan"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="flex items-center gap-1">
+                          <Mail className="h-3.5 w-3.5" /> Email Address{" "}
+                          <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          type="email"
+                          value={form.email}
+                          onChange={(e) => set("email", e.target.value)}
+                          placeholder="founder@startup.pk"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="flex items-center gap-1">
+                          <Lock className="h-3.5 w-3.5" /> Password{" "}
+                          <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          type="password"
+                          value={form.password}
+                          onChange={(e) => set("password", e.target.value)}
+                          placeholder="Minimum 6 characters"
+                          required
+                        />
+                      </div>
                     </>
                   )}
-                </Button>
+                </div>
+              )}
+
+              {/* STEP 1: CNIC, BANKING, KYC + PHONE */}
+              {step === 1 && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-3 duration-300 max-h-[60vh] overflow-y-auto pr-2">
+                  <p className="rounded-xl bg-[#FFF8E1] px-3 py-2 text-xs text-slate-600 font-medium">
+                    CNIC, banking details, biometric face match, and phone number.
+                  </p>
+
+                  <div className="space-y-1.5">
+                    <Label className="flex items-center gap-1">
+                      <IdCard className="h-3.5 w-3.5" /> CNIC Number{" "}
+                      <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      value={form.cnicNumber}
+                      onChange={(e) => set("cnicNumber", e.target.value)}
+                      placeholder="42101-XXXXXXX-X"
+                      required
+                    />
+                  </div>
+
+                  <div className="rounded-2xl border border-[#FFA500]/25 bg-[#FFF8E1]/40 p-4 space-y-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                      <Landmark className="h-3.5 w-3.5" /> Bank Details
+                    </p>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label>
+                          Bank Name <span className="text-red-500">*</span>
+                        </Label>
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#FFA500]"
+                          value={form.bankName}
+                          onChange={(e) => set("bankName", e.target.value)}
+                        >
+                          <option value="" disabled>
+                            Select your bank
+                          </option>
+                          {PAKISTAN_BANKS.map((bank) => (
+                            <option key={bank} value={bank}>
+                              {bank}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label>
+                          Account Title <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          value={form.accountTitle}
+                          onChange={(e) => set("accountTitle", e.target.value)}
+                          placeholder="Legal account ownership title"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="flex items-center gap-1">
+                        <CreditCard className="h-3.5 w-3.5" /> Bank Account Number / IBAN{" "}
+                        <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        value={form.bankAccountNumber}
+                        onChange={(e) => set("bankAccountNumber", e.target.value)}
+                        placeholder="PK00XXXX0000000000000000"
+                        className="font-mono text-sm"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="mb-3 text-xs text-slate-500">
+                      Upload CNIC Front and Back, then capture a live webcam selfie.
+                      Facial match of 70% or greater is required before admin review.
+                    </p>
+                    <CnicFaceVerify
+                      accent="amber"
+                      onComplete={(result) => setVerify(result)}
+                      onMatchFailed={() => setVerify(null)}
+                    />
+                    {verify && verify.faceMatchScore >= 70 && (
+                      <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-700">
+                        <CheckCircle2 className="mr-1 inline h-4 w-4" />
+                        Face matched successfully ({Math.round(verify.faceMatchScore)}% confidence)!
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="flex items-center gap-1">
+                      <Phone className="h-3.5 w-3.5" /> Phone Number{" "}
+                      <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      type="tel"
+                      value={form.phone}
+                      onChange={(e) => set("phone", e.target.value)}
+                      placeholder="+92 300 1234567"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 2: WAIT FOR ADMIN APPROVAL */}
+              {step === 2 && pendingUid && (
+                <div className="animate-in zoom-in-95 duration-400">
+                  <KycPendingGate
+                    uid={pendingUid}
+                    role="founder"
+                    email={form.email}
+                    approvedPath="/founder/dashboard"
+                  />
+                </div>
+              )}
+
+              {step < 2 && (
+                <div className="mt-6 flex items-center justify-between gap-3 border-t border-[#FFA500]/20 pt-4">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      if (step === 0) {
+                        if (awaitingEmail) {
+                          setAwaitingEmail(false);
+                        } else {
+                          setShowIntro(true);
+                        }
+                      } else {
+                        setStep((s) => s - 1);
+                      }
+                    }}
+                    className="rounded-full"
+                  >
+                    <ArrowLeft className="mr-1 h-4 w-4" /> Back
+                  </Button>
+
+                  {step === 0 && !awaitingEmail && (
+                    <Button
+                      type="button"
+                      disabled={!canNext() || creatingAccount}
+                      onClick={() => void handleCreateAccountAndSendEmail()}
+                      className="rounded-full text-white"
+                      style={{ background: "linear-gradient(135deg, #FFA500, #FFD700)" }}
+                    >
+                      {creatingAccount ? (
+                        <>
+                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Creating account…
+                        </>
+                      ) : (
+                        <>
+                          Continue <ArrowRight className="ml-1 h-4 w-4" />
+                        </>
+                      )}
+                    </Button>
+                  )}
+
+                  {step === 1 && (
+                    <Button
+                      type="button"
+                      disabled={!canNext() || submitting || submitDone}
+                      onClick={() => void handleSubmit()}
+                      className="rounded-full text-white"
+                      style={{ background: "linear-gradient(135deg, #FFA500, #FFD700)" }}
+                    >
+                      {submitDone ? (
+                        "Done, wait for admin approval"
+                      ) : verifying || submitting ? (
+                        <>
+                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                          {submitPhase || "Submitting…"}
+                        </>
+                      ) : (
+                        <>
+                          Submit for Admin Approval <ShieldCheck className="ml-1 h-4 w-4" />
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </div>
           </div>
         </>
       )}

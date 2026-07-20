@@ -521,28 +521,7 @@ const DEFAULT_OFFERS: Offer[] = [
   },
 ];
 
-const DEFAULT_INVESTMENTS: Investment[] = [
-  {
-    id: "inv-1",
-    businessName: "Atelier Mira",
-    amount: "$40,000",
-    terms: "8% Equity",
-    type: "on-platform",
-    method: "platform",
-    date: "2 weeks ago",
-    status: "completed"
-  },
-  {
-    id: "inv-2",
-    businessName: "Zenith Logistics",
-    amount: "$150,000",
-    terms: "Convertible Note (6% Cap)",
-    type: "off-platform",
-    method: "self",
-    date: "1 month ago",
-    status: "completed"
-  }
-];
+const DEFAULT_INVESTMENTS: Investment[] = [];
 
 const DEFAULT_REVIEWS: Review[] = [
   {

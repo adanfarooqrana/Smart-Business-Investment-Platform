@@ -12,8 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TestRouteImport } from './routes/test'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SiteSubdomainRouteImport } from './routes/site.$subdomain'
 import { Route as LandingSlugRouteImport } from './routes/landing.$slug'
 import { Route as FounderDashboardRouteImport } from './routes/founder.dashboard'
+import { Route as DashboardOrdersRouteImport } from './routes/dashboard.orders'
 import { Route as AppWholesaleRouteImport } from './routes/app.wholesale'
 import { Route as AppScoreRouteImport } from './routes/app.score'
 import { Route as AppRegisterRouteImport } from './routes/app.register'
@@ -26,6 +28,8 @@ import { Route as AppCommunityRouteImport } from './routes/app.community'
 import { Route as AppBizboardRouteImport } from './routes/app.bizboard'
 import { Route as AppAnalyticsRouteImport } from './routes/app.analytics'
 import { Route as AppAdminRouteImport } from './routes/app.admin'
+import { Route as AdminLoginRouteImport } from './routes/admin.login'
+import { Route as AdminDashboardRouteImport } from './routes/admin.dashboard'
 import { Route as AppBusinessprofileBusinessIdRouteImport } from './routes/app.businessprofile.$businessId'
 import { Route as AppInvestorIdeaIdeaIdRouteImport } from './routes/app.investor.idea.$ideaId'
 
@@ -44,6 +48,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SiteSubdomainRoute = SiteSubdomainRouteImport.update({
+  id: '/site/$subdomain',
+  path: '/site/$subdomain',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LandingSlugRoute = LandingSlugRouteImport.update({
   id: '/landing/$slug',
   path: '/landing/$slug',
@@ -52,6 +61,11 @@ const LandingSlugRoute = LandingSlugRouteImport.update({
 const FounderDashboardRoute = FounderDashboardRouteImport.update({
   id: '/founder/dashboard',
   path: '/founder/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardOrdersRoute = DashboardOrdersRouteImport.update({
+  id: '/dashboard/orders',
+  path: '/dashboard/orders',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppWholesaleRoute = AppWholesaleRouteImport.update({
@@ -114,6 +128,16 @@ const AppAdminRoute = AppAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AppRoute,
 } as any)
+const AdminLoginRoute = AdminLoginRouteImport.update({
+  id: '/admin/login',
+  path: '/admin/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminDashboardRoute = AdminDashboardRouteImport.update({
+  id: '/admin/dashboard',
+  path: '/admin/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppBusinessprofileBusinessIdRoute =
   AppBusinessprofileBusinessIdRouteImport.update({
     id: '/businessprofile/$businessId',
@@ -130,6 +154,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/test': typeof TestRoute
+  '/admin/dashboard': typeof AdminDashboardRoute
+  '/admin/login': typeof AdminLoginRoute
   '/app/admin': typeof AppAdminRoute
   '/app/analytics': typeof AppAnalyticsRoute
   '/app/bizboard': typeof AppBizboardRoute
@@ -142,8 +168,10 @@ export interface FileRoutesByFullPath {
   '/app/register': typeof AppRegisterRoute
   '/app/score': typeof AppScoreRoute
   '/app/wholesale': typeof AppWholesaleRoute
+  '/dashboard/orders': typeof DashboardOrdersRoute
   '/founder/dashboard': typeof FounderDashboardRoute
   '/landing/$slug': typeof LandingSlugRoute
+  '/site/$subdomain': typeof SiteSubdomainRoute
   '/app/businessprofile/$businessId': typeof AppBusinessprofileBusinessIdRoute
   '/app/investor/idea/$ideaId': typeof AppInvestorIdeaIdeaIdRoute
 }
@@ -151,6 +179,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/test': typeof TestRoute
+  '/admin/dashboard': typeof AdminDashboardRoute
+  '/admin/login': typeof AdminLoginRoute
   '/app/admin': typeof AppAdminRoute
   '/app/analytics': typeof AppAnalyticsRoute
   '/app/bizboard': typeof AppBizboardRoute
@@ -163,8 +193,10 @@ export interface FileRoutesByTo {
   '/app/register': typeof AppRegisterRoute
   '/app/score': typeof AppScoreRoute
   '/app/wholesale': typeof AppWholesaleRoute
+  '/dashboard/orders': typeof DashboardOrdersRoute
   '/founder/dashboard': typeof FounderDashboardRoute
   '/landing/$slug': typeof LandingSlugRoute
+  '/site/$subdomain': typeof SiteSubdomainRoute
   '/app/businessprofile/$businessId': typeof AppBusinessprofileBusinessIdRoute
   '/app/investor/idea/$ideaId': typeof AppInvestorIdeaIdeaIdRoute
 }
@@ -173,6 +205,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/test': typeof TestRoute
+  '/admin/dashboard': typeof AdminDashboardRoute
+  '/admin/login': typeof AdminLoginRoute
   '/app/admin': typeof AppAdminRoute
   '/app/analytics': typeof AppAnalyticsRoute
   '/app/bizboard': typeof AppBizboardRoute
@@ -185,8 +219,10 @@ export interface FileRoutesById {
   '/app/register': typeof AppRegisterRoute
   '/app/score': typeof AppScoreRoute
   '/app/wholesale': typeof AppWholesaleRoute
+  '/dashboard/orders': typeof DashboardOrdersRoute
   '/founder/dashboard': typeof FounderDashboardRoute
   '/landing/$slug': typeof LandingSlugRoute
+  '/site/$subdomain': typeof SiteSubdomainRoute
   '/app/businessprofile/$businessId': typeof AppBusinessprofileBusinessIdRoute
   '/app/investor/idea/$ideaId': typeof AppInvestorIdeaIdeaIdRoute
 }
@@ -196,6 +232,8 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/test'
+    | '/admin/dashboard'
+    | '/admin/login'
     | '/app/admin'
     | '/app/analytics'
     | '/app/bizboard'
@@ -208,8 +246,10 @@ export interface FileRouteTypes {
     | '/app/register'
     | '/app/score'
     | '/app/wholesale'
+    | '/dashboard/orders'
     | '/founder/dashboard'
     | '/landing/$slug'
+    | '/site/$subdomain'
     | '/app/businessprofile/$businessId'
     | '/app/investor/idea/$ideaId'
   fileRoutesByTo: FileRoutesByTo
@@ -217,6 +257,8 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/test'
+    | '/admin/dashboard'
+    | '/admin/login'
     | '/app/admin'
     | '/app/analytics'
     | '/app/bizboard'
@@ -229,8 +271,10 @@ export interface FileRouteTypes {
     | '/app/register'
     | '/app/score'
     | '/app/wholesale'
+    | '/dashboard/orders'
     | '/founder/dashboard'
     | '/landing/$slug'
+    | '/site/$subdomain'
     | '/app/businessprofile/$businessId'
     | '/app/investor/idea/$ideaId'
   id:
@@ -238,6 +282,8 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/test'
+    | '/admin/dashboard'
+    | '/admin/login'
     | '/app/admin'
     | '/app/analytics'
     | '/app/bizboard'
@@ -250,8 +296,10 @@ export interface FileRouteTypes {
     | '/app/register'
     | '/app/score'
     | '/app/wholesale'
+    | '/dashboard/orders'
     | '/founder/dashboard'
     | '/landing/$slug'
+    | '/site/$subdomain'
     | '/app/businessprofile/$businessId'
     | '/app/investor/idea/$ideaId'
   fileRoutesById: FileRoutesById
@@ -260,8 +308,12 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   TestRoute: typeof TestRoute
+  AdminDashboardRoute: typeof AdminDashboardRoute
+  AdminLoginRoute: typeof AdminLoginRoute
+  DashboardOrdersRoute: typeof DashboardOrdersRoute
   FounderDashboardRoute: typeof FounderDashboardRoute
   LandingSlugRoute: typeof LandingSlugRoute
+  SiteSubdomainRoute: typeof SiteSubdomainRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -287,6 +339,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/site/$subdomain': {
+      id: '/site/$subdomain'
+      path: '/site/$subdomain'
+      fullPath: '/site/$subdomain'
+      preLoaderRoute: typeof SiteSubdomainRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/landing/$slug': {
       id: '/landing/$slug'
       path: '/landing/$slug'
@@ -299,6 +358,13 @@ declare module '@tanstack/react-router' {
       path: '/founder/dashboard'
       fullPath: '/founder/dashboard'
       preLoaderRoute: typeof FounderDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/orders': {
+      id: '/dashboard/orders'
+      path: '/dashboard/orders'
+      fullPath: '/dashboard/orders'
+      preLoaderRoute: typeof DashboardOrdersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/wholesale': {
@@ -385,6 +451,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminRouteImport
       parentRoute: typeof AppRoute
     }
+    '/admin/login': {
+      id: '/admin/login'
+      path: '/admin/login'
+      fullPath: '/admin/login'
+      preLoaderRoute: typeof AdminLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/dashboard': {
+      id: '/admin/dashboard'
+      path: '/admin/dashboard'
+      fullPath: '/admin/dashboard'
+      preLoaderRoute: typeof AdminDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/businessprofile/$businessId': {
       id: '/app/businessprofile/$businessId'
       path: '/businessprofile/$businessId'
@@ -452,8 +532,12 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   TestRoute: TestRoute,
+  AdminDashboardRoute: AdminDashboardRoute,
+  AdminLoginRoute: AdminLoginRoute,
+  DashboardOrdersRoute: DashboardOrdersRoute,
   FounderDashboardRoute: FounderDashboardRoute,
   LandingSlugRoute: LandingSlugRoute,
+  SiteSubdomainRoute: SiteSubdomainRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

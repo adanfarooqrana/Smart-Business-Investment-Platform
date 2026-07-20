@@ -2,26 +2,36 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useInvestorSession } from "@/hooks/useInvestorSession";
-import { getStartupIdeaById } from "@/data/startupIdeas";
-import { subscribeToPitchedIdeaById } from "@/services/pitchIdeaService";
+import { subscribeToFounderPitchById } from "@/services/founderFirebaseService";
 import { IdeaDetailView } from "@/components/investor/IdeaStage1Detail";
 import type { StartupIdea } from "@/data/startupIdeas";
 
+type IdeaSearch = {
+  founderId?: string;
+  stage?: number;
+};
+
 export const Route = createFileRoute("/app/investor/idea/$ideaId")({
+  validateSearch: (search: Record<string, unknown>): IdeaSearch => {
+    const founderId =
+      typeof search.founderId === "string" && search.founderId.trim()
+        ? search.founderId.trim()
+        : undefined;
+    const stageRaw = Number(search.stage);
+    const stage =
+      stageRaw === 1 || stageRaw === 2 || stageRaw === 3 ? stageRaw : undefined;
+    return { founderId, stage };
+  },
   component: InvestorIdeaDetailPage,
 });
 
-function isFirebasePitchedIdeaId(ideaId: string): boolean {
-  return ideaId.startsWith("pitch-");
-}
-
 function InvestorIdeaDetailPage() {
   const { ideaId } = Route.useParams();
+  const { founderId, stage: initialStage } = Route.useSearch();
   const { sessionReady, isInvestorRegistered } = useInvestorSession();
   const navigate = useNavigate();
-  const staticIdea = getStartupIdeaById(ideaId);
-  const [idea, setIdea] = useState<StartupIdea | undefined>(staticIdea);
-  const [loading, setLoading] = useState(!staticIdea || isFirebasePitchedIdeaId(ideaId));
+  const [idea, setIdea] = useState<StartupIdea | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (sessionReady && !isInvestorRegistered) {
@@ -30,20 +40,35 @@ function InvestorIdeaDetailPage() {
   }, [sessionReady, isInvestorRegistered, navigate]);
 
   useEffect(() => {
-    if (staticIdea && !isFirebasePitchedIdeaId(ideaId)) {
-      setIdea(staticIdea);
-      setLoading(false);
-      return;
+    let active = true;
+    setLoading(true);
+    setIdea(null);
+
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = subscribeToFounderPitchById(ideaId, founderId, (pitched) => {
+        if (!active) return;
+        setIdea(pitched);
+        setLoading(false);
+      });
+    } catch (error) {
+      console.error("Investor idea detail subscribe error:", error);
+      if (active) {
+        setIdea(null);
+        setLoading(false);
+      }
     }
 
-    setLoading(true);
-    const unsubscribe = subscribeToPitchedIdeaById(ideaId, (pitched) => {
-      setIdea(pitched ?? staticIdea);
-      setLoading(false);
-    });
-
-    return unsubscribe;
-  }, [ideaId, staticIdea]);
+    return () => {
+      active = false;
+      try {
+        unsubscribe?.();
+      } catch (error) {
+        console.error("Investor idea detail cleanup error:", error);
+      }
+      setIdea(null);
+    };
+  }, [ideaId, founderId]);
 
   if (!sessionReady || !isInvestorRegistered) {
     return (
@@ -77,5 +102,10 @@ function InvestorIdeaDetailPage() {
     );
   }
 
-  return <IdeaDetailView idea={idea} />;
+  return (
+    <IdeaDetailView
+      idea={idea}
+      initialStage={initialStage === 1 || initialStage === 2 || initialStage === 3 ? initialStage : 1}
+    />
+  );
 }

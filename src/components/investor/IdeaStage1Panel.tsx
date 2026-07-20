@@ -2,18 +2,11 @@ import {
   BookOpen,
   TrendingUp,
   PieChart,
-  BarChart3,
-  Percent,
   Building2,
   Lightbulb,
-  Users,
-  Coins,
-  Star,
-  MessageCircle,
   CheckCircle2,
 } from "lucide-react";
 import type { StartupIdea } from "@/data/startupIdeas";
-import { formatPkr } from "@/lib/investmentCalculator";
 
 type IdeaStage1PanelProps = {
   idea: StartupIdea;
@@ -26,13 +19,18 @@ export function IdeaStage1Panel({ idea, onAskAi, checkedItems, onToggleCheck }: 
   const sp = idea.stage3.socialProof;
 
   const terms = [
-    { key: "ideaDescription", label: "Idea Description", value: idea.stage1.ideaDescription, icon: BookOpen, termId: "Idea Description" },
+    { key: "ideaDescription", label: "Business Description", value: idea.stage1.ideaDescription, icon: BookOpen, termId: "Business Description" },
+    {
+      key: "coreProblemSolution",
+      label: "Problem / Solution",
+      value: idea.stage1.coreProblemSolution ?? "",
+      icon: Lightbulb,
+      termId: "Problem / Solution",
+    },
     { key: "expectedRoi", label: "Expected ROI", value: idea.stage1.expectedRoi, icon: TrendingUp, termId: "Expected ROI" },
-    { key: "profitSharing", label: "Profit Sharing", value: idea.stage1.profitSharingPercent, icon: Percent, termId: "Profit Sharing" },
-    { key: "ebitda", label: "EBITDA Estimate", value: idea.stage1.ebitdaEstimate, icon: BarChart3, termId: "EBITDA Estimate" },
     { key: "equity", label: "Equity Offered", value: idea.stage1.equityOffered, icon: PieChart, termId: "Equity Offered" },
-    { key: "industry", label: "Industry Field", value: idea.stage1.industryField, icon: Building2, termId: "Industry Field" },
-  ];
+    { key: "industry", label: "Industry Field", value: idea.stage1.industryField || idea.stage1.categoryIndustry || "", icon: Building2, termId: "Industry Field" },
+  ].filter((term) => String(term.value ?? "").trim().length > 0);
 
   return (
     <div className="grid gap-5 lg:grid-cols-[240px_1fr]">
@@ -79,63 +77,8 @@ export function IdeaStage1Panel({ idea, onAskAi, checkedItems, onToggleCheck }: 
         </ul>
       </aside>
 
-      {/* Main content */}
+      {/* Main content — authentic founder terms only */}
       <div className="space-y-5">
-        {/* Social proof strip — sunlight theme */}
-        <section className="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-br from-amber-100/90 via-orange-50 to-yellow-50 p-5 shadow-sm">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_90%_10%,rgba(251,191,36,0.25),transparent_50%)]" />
-          <div className="relative grid gap-4 sm:grid-cols-3">
-            <StatBlock
-              icon={Users}
-              label="Investors Joined"
-              value={`${sp.investorCount}+`}
-              sub="verified on-platform"
-            />
-            <StatBlock
-              icon={Coins}
-              label="Total Invested"
-              value={formatPkr(sp.totalInvestedPkr)}
-              sub="in this startup"
-            />
-            <StatBlock
-              icon={Star}
-              label="Avg. Rating"
-              value={`${(sp.investorFeedback.reduce((a, f) => a + f.rating, 0) / sp.investorFeedback.length).toFixed(1)}/5`}
-              sub="investor sentiment"
-            />
-          </div>
-
-          {/* Investor voices */}
-          <div className="relative mt-5 border-t border-amber-200/60 pt-4">
-            <p className="mb-3 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-800/80">
-              <MessageCircle className="h-3.5 w-3.5" />
-              Investors Is Idea Ke Baare Mein Kya Kehte Hain
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {sp.investorFeedback.map((fb) => (
-                <blockquote
-                  key={fb.author}
-                  className="rounded-xl border border-white/80 bg-white/70 p-3 shadow-sm backdrop-blur-sm"
-                >
-                  <div className="mb-2 flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-slate-900">{fb.author}</p>
-                      <p className="text-[9px] text-slate-500">{fb.role}</p>
-                    </div>
-                    <div className="flex gap-0.5">
-                      {Array.from({ length: fb.rating }).map((_, i) => (
-                        <Star key={i} className="h-3 w-3 fill-amber-400 text-amber-400" />
-                      ))}
-                    </div>
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-slate-700 italic">"{fb.comment}"</p>
-                </blockquote>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Financial terms grid */}
         <div className="grid gap-3 sm:grid-cols-2">
           {terms.map((term) => {
             const Icon = term.icon;
@@ -145,7 +88,7 @@ export function IdeaStage1Panel({ idea, onAskAi, checkedItems, onToggleCheck }: 
                 type="button"
                 onClick={() => onAskAi(term.termId)}
                 className={`group rounded-2xl border p-4 text-left transition-all hover:shadow-md ${
-                  term.key === "ideaDescription" ? "sm:col-span-2" : ""
+                  term.key === "ideaDescription" || term.key === "coreProblemSolution" ? "sm:col-span-2" : ""
                 } border-amber-100/80 bg-white hover:border-amber-200`}
               >
                 <div className="mb-2 flex items-center gap-2">
@@ -154,7 +97,13 @@ export function IdeaStage1Panel({ idea, onAskAi, checkedItems, onToggleCheck }: 
                   </div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700/70">{term.label}</span>
                 </div>
-                <p className={`text-sm text-slate-800 ${term.key !== "ideaDescription" ? "font-display font-bold" : ""}`}>
+                <p
+                  className={`text-sm text-slate-800 ${
+                    term.key !== "ideaDescription" && term.key !== "coreProblemSolution"
+                      ? "font-display font-bold"
+                      : ""
+                  }`}
+                >
                   {term.value}
                 </p>
               </button>
@@ -162,27 +111,6 @@ export function IdeaStage1Panel({ idea, onAskAi, checkedItems, onToggleCheck }: 
           })}
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatBlock({
-  icon: Icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: typeof Users;
-  label: string;
-  value: string;
-  sub: string;
-}) {
-  return (
-    <div className="rounded-xl border border-white/60 bg-white/60 p-3 backdrop-blur-sm">
-      <Icon className="mb-1.5 h-4 w-4 text-amber-600" />
-      <p className="text-[9px] font-bold uppercase tracking-wider text-amber-700/70">{label}</p>
-      <p className="font-display text-lg font-black text-amber-950">{value}</p>
-      <p className="text-[9px] text-amber-800/60">{sub}</p>
     </div>
   );
 }

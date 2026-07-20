@@ -33,6 +33,18 @@ export const PITCH_CATEGORIES = [
 
 export type PitchCategory = (typeof PITCH_CATEGORIES)[number];
 
+/** Categories allowed to choose Digital Product / Service vs Physical Product */
+export const DIGITAL_PRODUCT_CATEGORIES = [
+  "Tech / SaaS",
+  "Health & Wellness",
+  "EdTech",
+] as const;
+
+export function isDigitalProductCategory(category: string | undefined | null): boolean {
+  const c = String(category || "").trim();
+  return (DIGITAL_PRODUCT_CATEGORIES as readonly string[]).includes(c);
+}
+
 /** Wizard Step 1 — maps to investment_ideas + stage1_data (IdeaStage1Panel) */
 export type PitchStage1Input = {
   ideaTitle: string;
@@ -42,6 +54,11 @@ export type PitchStage1Input = {
   requiredInvestmentPkr: number;
   equityPercent: number;
   expectedRoiPercent: number;
+  productType?: "Physical" | "Digital";
+  manufacturingCapacity?: string;
+  logisticsPackagingType?: string;
+  sourcingLocation?: string;
+  sampleAvailability?: boolean;
 };
 
 /** Wizard Step 2 — maps to stage2_data (IdeaStage2Panel) */
@@ -56,6 +73,7 @@ export type PitchStage2Input = {
   founderPriorVentures?: string;
   founderEducation?: string;
   verificationScore?: number;
+  productLiveUrl?: string;
 };
 
 /** Wizard Step 3 — maps to stage3_data (IdeaStage3Panel, InvestmentAgreementModal) */
@@ -74,6 +92,7 @@ export type PitchIdeaPayload = {
   stage3: PitchStage3Input;
   /** Optional user-edited profit projection (expense breakdown, valuation, etc.) */
   projections?: ProfitProjection;
+  editIdeaId?: string;
 };
 
 export type ProfitProjection = {
@@ -126,6 +145,11 @@ export type InvestmentIdeaDoc = {
   equityPercent: number;
   expectedRoiPercent: number;
   status: "live";
+  productType?: "Physical" | "Digital";
+  manufacturingCapacity?: string;
+  logisticsPackagingType?: string;
+  sourcingLocation?: string;
+  sampleAvailability?: boolean;
 };
 
 export type Stage1DataDoc = StartupIdeaStage1 & {
@@ -137,6 +161,7 @@ export type Stage2DataDoc = StartupIdeaStage2 & {
   ideaId: string;
   customerLedgerUrl?: string;
   suggestedProfitMarginPercent: number;
+  productLiveUrl?: string;
 };
 
 export type Stage3DataDoc = StartupIdeaStage3 & {
@@ -168,6 +193,11 @@ export function buildInvestmentIdeaDoc(
     equityPercent: stage1.equityPercent,
     expectedRoiPercent: stage1.expectedRoiPercent,
     status: "live",
+    productType: stage1.productType,
+    manufacturingCapacity: stage1.manufacturingCapacity,
+    logisticsPackagingType: stage1.logisticsPackagingType,
+    sourcingLocation: stage1.sourcingLocation,
+    sampleAvailability: stage1.sampleAvailability,
   };
 }
 
@@ -241,6 +271,7 @@ export function buildStage2DataDoc(
     proofGallery,
     customerLedgerUrl,
     suggestedProfitMarginPercent: projections.suggestedProfitMarginPercent,
+    productLiveUrl: stage2.productLiveUrl || "",
   };
 }
 

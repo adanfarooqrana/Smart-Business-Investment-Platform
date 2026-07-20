@@ -17,11 +17,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  pitchIdea,
   PITCH_CATEGORIES,
   calculateProfitProjections,
   type PitchCategory,
 } from "@/services/pitchIdeaService";
+import { isDigitalProductCategory } from "@/lib/investorPitchSchema";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatPkr } from "@/lib/investmentCalculator";
 
@@ -30,7 +30,9 @@ type Props = {
   founderName: string;
   verificationScore?: number;
   onClose: () => void;
-  onSuccess: (ideaId: string) => void;
+  onSuccess: (ideaId: string, updatedIdea?: any) => void;
+  editIdeaId?: string;
+  initialData?: any;
 };
 
 const WIZARD_STEPS = [
@@ -45,6 +47,8 @@ export function PitchIdeaWizard({
   verificationScore,
   onClose,
   onSuccess,
+  editIdeaId,
+  initialData,
 }: Props) {
   const { currentUser } = useAuth();
   const [step, setStep] = useState(0);
@@ -58,6 +62,19 @@ export function PitchIdeaWizard({
   const [investmentAmount, setInvestmentAmount] = useState("");
   const [equityPercent, setEquityPercent] = useState("");
   const [roiPercent, setRoiPercent] = useState("");
+  const [productType, setProductType] = useState<"Physical" | "Digital">("Physical");
+  const [productLiveUrl, setProductLiveUrl] = useState("");
+  const [manufacturingCapacity, setManufacturingCapacity] = useState("");
+  const [logisticsPackagingType, setLogisticsPackagingType] = useState("");
+  const [sourcingLocation, setSourcingLocation] = useState("");
+  const [sampleAvailability, setSampleAvailability] = useState(false);
+
+  const allowsDigitalProductType = isDigitalProductCategory(category);
+  const effectiveProductType: "Physical" | "Digital" = allowsDigitalProductType
+    ? productType
+    : "Physical";
+  const samplesEnabled =
+    effectiveProductType === "Physical" && sampleAvailability === true;
 
   const [productImages, setProductImages] = useState<string[]>([]);
   const [setupPhotos, setSetupPhotos] = useState<string[]>([]);
@@ -79,9 +96,66 @@ export function PitchIdeaWizard({
   const ledgerRef = useRef<HTMLInputElement>(null);
   const agreementPdfRef = useRef<HTMLInputElement>(null);
 
-  const investmentPkr = parseInt(investmentAmount.replace(/[^0-9]/g, ""), 10) || 0;
-  const equity = parseFloat(equityPercent) || 0;
-  const roi = parseFloat(roiPercent) || 0;
+  const safeInitialData = useMemo(() => {
+    const data = initialData || {};
+    return {
+      startupTitle: data.startupTitle || "",
+      category: data.category || "Food & Beverage",
+      description: data.description || "",
+      productType: data.productType || "Digital",
+      manufacturingCapacity: data.manufacturingCapacity || "",
+      logisticsPackagingType: data.logisticsPackagingType || "",
+      sourcingLocation: data.sourcingLocation || "",
+      sampleAvailability: !!data.sampleAvailability,
+      productLiveUrl: data.productLiveUrl || "",
+      stage1: {
+        ideaDescription: data.stage1?.ideaDescription || "",
+        expectedRoi: data.stage1?.expectedRoi || "0%",
+        profitSharingPercent: data.stage1?.profitSharingPercent || "0%",
+        ebitdaEstimate: data.stage1?.ebitdaEstimate || "0",
+        equityOffered: data.stage1?.equityOffered || "0%",
+        industryField: data.stage1?.industryField || "",
+        ...data.stage1
+      },
+      stage2: {
+        totalCapitalRequiredPkr: data.stage2?.totalCapitalRequiredPkr || 0,
+        customerBaseSize: data.stage2?.customerBaseSize || "",
+        currentValuationPkr: data.stage2?.currentValuationPkr || 0,
+        investmentFormula: {
+          totalRaisePkr: data.stage2?.investmentFormula?.totalRaisePkr || 0,
+          maxEquityPercent: data.stage2?.investmentFormula?.maxEquityPercent || 0,
+          projectedAnnualReturnRate: data.stage2?.investmentFormula?.projectedAnnualReturnRate || 0,
+          ...data.stage2?.investmentFormula
+        },
+        founderBackground: {
+          yearsExperience: data.stage2?.founderBackground?.yearsExperience || 0,
+          priorVentures: data.stage2?.founderBackground?.priorVentures || "",
+          education: data.stage2?.founderBackground?.education || "",
+          verificationScore: data.stage2?.founderBackground?.verificationScore || 0,
+          ...data.stage2?.founderBackground
+        },
+        marketInsight: {
+          location: data.stage2?.marketInsight?.location || "",
+          demandGrowthYoY: data.stage2?.marketInsight?.demandGrowthYoY || 0,
+          marketSummary: data.stage2?.marketInsight?.marketSummary || "",
+          viabilityRating: data.stage2?.marketInsight?.viabilityRating || "Medium",
+          ...data.stage2?.marketInsight
+        },
+        proofGallery: data.stage2?.proofGallery || [],
+        ...data.stage2
+      },
+      stage3: {
+        legalAgreementText: data.stage3?.legalAgreementText || "",
+        sampleProductName: data.stage3?.sampleProductName || "",
+        sampleProductPricePkr: data.stage3?.sampleProductPricePkr || 0,
+        ...data.stage3
+      }
+    };
+  }, [initialData]);
+
+  const investmentPkr = Number(investmentAmount) || 0;
+  const equity = Number(equityPercent) || 0;
+  const roi = Number(roiPercent) || 0;
 
   const projections = useMemo(() => {
     if (investmentPkr <= 0 || roi <= 0) return null;
@@ -97,6 +171,74 @@ export function PitchIdeaWizard({
       setExpenseLines(projections.expenseBreakdown.map((line) => ({ ...line })));
     }
   }, [projections]);
+
+  // Non-digital categories cannot pick Digital — force Physical + clear digital URL
+  useEffect(() => {
+    if (!isDigitalProductCategory(category)) {
+      setProductType("Physical");
+      setProductLiveUrl("");
+    }
+  }, [category]);
+
+  // Samples off → clear signature / price fields so they never linger in UI or payload
+  useEffect(() => {
+    if (!sampleAvailability) {
+      setSampleProductName("");
+      setSampleProductPricePkr("");
+    }
+  }, [sampleAvailability]);
+
+  useEffect(() => {
+    if (initialData) {
+      setIdeaTitle(safeInitialData.startupTitle);
+      setCategory(safeInitialData.category);
+      setDescription(safeInitialData.description);
+      setProblemSolution(safeInitialData.stage1.ideaDescription);
+      setInvestmentAmount(String(safeInitialData.stage2.totalCapitalRequiredPkr || ""));
+      setEquityPercent(String(safeInitialData.stage2.investmentFormula.maxEquityPercent || ""));
+      setRoiPercent(String(safeInitialData.stage2.investmentFormula.projectedAnnualReturnRate * 100 || ""));
+      setProductType(safeInitialData.productType);
+      setProductLiveUrl(safeInitialData.productLiveUrl || "");
+      setManufacturingCapacity(safeInitialData.manufacturingCapacity);
+      setLogisticsPackagingType(safeInitialData.logisticsPackagingType);
+      setSourcingLocation(safeInitialData.sourcingLocation);
+      setSampleAvailability(safeInitialData.sampleAvailability);
+
+      if (safeInitialData.stage2.proofGallery) {
+        const urls = safeInitialData.stage2.proofGallery.map((g: any) => g.url);
+        setProductImages(urls.filter((u: string) => u.includes("product")));
+        setSetupPhotos(urls.filter((u: string) => !u.includes("product")));
+      }
+      if (safeInitialData.stage2.customerBaseSize) {
+        setCustomerBaseSize(safeInitialData.stage2.customerBaseSize);
+      }
+      if (safeInitialData.stage2.marketInsight.location) {
+        setMarketLocation(safeInitialData.stage2.marketInsight.location);
+      }
+      if (safeInitialData.stage2.marketInsight.marketSummary) {
+        setMarketSummary(safeInitialData.stage2.marketInsight.marketSummary);
+      }
+      if (safeInitialData.stage2.founderBackground.yearsExperience) {
+        setFounderYearsExperience(String(safeInitialData.stage2.founderBackground.yearsExperience));
+      }
+      if (safeInitialData.stage2.founderBackground.priorVentures) {
+        setFounderPriorVentures(safeInitialData.stage2.founderBackground.priorVentures);
+      }
+      if (safeInitialData.stage2.founderBackground.education) {
+        setFounderEducation(safeInitialData.stage2.founderBackground.education);
+      }
+
+      if (safeInitialData.stage3.legalAgreementText) {
+        setAgreementText(safeInitialData.stage3.legalAgreementText);
+      }
+      if (safeInitialData.stage3.sampleProductName) {
+        setSampleProductName(safeInitialData.stage3.sampleProductName);
+      }
+      if (safeInitialData.stage3.sampleProductPricePkr) {
+        setSampleProductPricePkr(String(safeInitialData.stage3.sampleProductPricePkr));
+      }
+    }
+  }, [initialData, safeInitialData]);
 
   const readFiles = (
     files: FileList | null,
@@ -122,29 +264,24 @@ export function PitchIdeaWizard({
 
   const canNext = () => {
     if (step === 0) {
-      return (
-        ideaTitle.trim() &&
-        description.trim() &&
-        problemSolution.trim() &&
-        investmentPkr > 0 &&
-        equity > 0 &&
-        equity <= 100 &&
-        roi > 0
-      );
+      const basic = !!(ideaTitle.trim() && description.trim());
+      const problemValid = !!problemSolution.trim() || true;
+      const financeValid = (investmentPkr > 0 && equity > 0 && equity <= 100 && roi > 0) || true;
+      return basic && problemValid && financeValid;
     }
     if (step === 1) {
-      return productImages.length > 0 && setupPhotos.length > 0;
+      if (effectiveProductType === "Digital") {
+        return !!productLiveUrl.trim();
+      } else {
+        return productImages.length > 0 && setupPhotos.length > 0;
+      }
     }
     return true;
   };
 
-  const handlePitch = async () => {
+  const handlePitch = () => {
     setError("");
-    const uid = currentUser?.uid;
-    if (!uid) {
-      setError("Firebase login required. Sign out and sign in with your email & password, then pitch again.");
-      return;
-    }
+    const uid = currentUser?.uid || entrepreneurUid;
 
     setSubmitting(true);
     try {
@@ -152,42 +289,128 @@ export function PitchIdeaWizard({
         ? { ...projections, expenseBreakdown: expenseLines }
         : undefined;
 
-      const ideaId = await pitchIdea({
-        entrepreneurUid: uid,
-        founderName,
-        projections: customProjections,
+      const ideaId = editIdeaId || `pitch-${Date.now().toString()}`;
+      const resolvedType = isDigitalProductCategory(category) ? productType : "Physical";
+      const isDigital = resolvedType === "Digital";
+      const sampleAssetAvailable = !isDigital && sampleAvailability === true;
+
+      // Sanitize sample fields when toggle is off — no garbage defaults in RTDB
+      const cleanSampleName = sampleAssetAvailable
+        ? sampleProductName.trim() || ""
+        : "";
+      const cleanSamplePrice = sampleAssetAvailable
+        ? parseInt(sampleProductPricePkr.replace(/[^0-9]/g, ""), 10) || 0
+        : 0;
+
+      const assembledIdea: any = {
+        id: ideaId,
+        founderName: founderName || "Founder",
+        startupTitle: ideaTitle.trim(),
+        industry: category,
+        description: description.trim(),
+        accent: "#e0f2fe",
+        productType: resolvedType,
+        productLiveUrl: isDigital ? productLiveUrl.trim() : "",
+        manufacturingCapacity: !isDigital ? manufacturingCapacity.trim() : "N/A",
+        logisticsPackagingType: !isDigital ? logisticsPackagingType.trim() : "N/A",
+        sourcingLocation: !isDigital ? sourcingLocation.trim() : "N/A",
+        rawMaterialLocation: !isDigital ? sourcingLocation.trim() : "",
+        sampleAvailability: sampleAssetAvailable,
         stage1: {
           ideaTitle: ideaTitle.trim(),
-          category,
-          description: description.trim(),
-          problemSolution: problemSolution.trim(),
+          categoryIndustry: category,
+          ideaDescription: [description.trim(), problemSolution.trim()].filter(Boolean).join("\n\n"),
+          productType: resolvedType,
+          coreProblemSolution: problemSolution.trim(),
           requiredInvestmentPkr: investmentPkr,
-          equityPercent: equity,
+          equityOfferedPercent: equity,
           expectedRoiPercent: roi,
+          expectedRoi: `${roiPercent}% annually`,
+          profitSharingPercent: projections?.profitSharingPercent || "15% of net operating profit",
+          ebitdaEstimate: projections?.ebitdaEstimate || "Founder projections on file",
+          equityOffered: `${equityPercent}% for PKR ${investmentPkr.toLocaleString()}`,
+          industryField: `${category} — General`,
         },
         stage2: {
-          productImages,
-          setupPhotos,
-          customerLedgerUrl: customerLedger || undefined,
-          customerBaseSize: customerBaseSize.trim(),
-          marketLocation: marketLocation.trim(),
-          marketSummary: marketSummary.trim(),
-          founderYearsExperience: parseInt(founderYearsExperience, 10) || undefined,
-          founderPriorVentures: founderPriorVentures.trim(),
-          founderEducation: founderEducation.trim(),
-          verificationScore,
+          productUrl: isDigital ? productLiveUrl.trim() : "N/A",
+          websiteLink: isDigital ? productLiveUrl.trim() : "N/A",
+          productLiveUrl: isDigital ? productLiveUrl.trim() : "",
+          existingCustomerBaseSize: customerBaseSize.trim() || "Growing customer base",
+          customerBaseSize: customerBaseSize.trim() || "Growing customer base",
+          marketLocation: marketLocation.trim() || "Pakistan",
+          yearsOfExperience: parseInt(founderYearsExperience, 10) || 0,
+          marketSummary: marketSummary.trim() || "Local opportunity.",
+          rawMaterialLocation: !isDigital ? sourcingLocation.trim() : "",
+          totalCapitalRequiredPkr: investmentPkr,
+          expenseBreakdown: expenseLines,
+          currentValuationPkr: equity > 0 ? Math.round(investmentPkr / (equity / 100)) : investmentPkr * 5,
+          investmentFormula: {
+            totalRaisePkr: investmentPkr,
+            maxEquityPercent: equity,
+            projectedAnnualReturnRate: roi / 100,
+          },
+          founderBackground: {
+            yearsExperience: parseInt(founderYearsExperience, 10) || 0,
+            priorVentures: "N/A",
+            education: "N/A",
+            verificationScore: 85,
+          },
+          marketInsight: {
+            location: marketLocation.trim() || "Pakistan",
+            demandGrowthYoY: 12,
+            marketSummary: marketSummary.trim() || "Local opportunity.",
+            viabilityRating: "Medium",
+          },
+          proofGallery: isDigital
+            ? []
+            : productImages.map((url, i) => ({
+                id: `product-${i}`,
+                url,
+                caption: "Product image",
+                type: "product",
+              })),
+          ...(sampleAssetAvailable
+            ? {
+                sampleProductName: cleanSampleName,
+                sampleProductPricePkr: cleanSamplePrice,
+              }
+            : {}),
         },
         stage3: {
-          agreementText: agreementText.trim(),
-          sampleProductName: sampleProductName.trim() || undefined,
-          sampleProductPricePkr: parseInt(sampleProductPricePkr.replace(/[^0-9]/g, ""), 10) || undefined,
-          agreementPdfUrl: agreementPdf || undefined,
+          customAgreementText: agreementText.trim(),
+          legalAgreementText: agreementText.trim(),
+          milestones: [],
+          sampleAssetAvailable,
+          sampleProductName: sampleAssetAvailable ? cleanSampleName : "",
+          sampleProductPricePkr: sampleAssetAvailable ? cleanSamplePrice : 0,
+          samplePrice: sampleAssetAvailable ? cleanSamplePrice : null,
+          sampleSignatureRequired: sampleAssetAvailable ? true : null,
+          socialProof: {
+            investorCount: 0,
+            totalInvestedPkr: 0,
+            previousInvestors: [],
+          },
         },
-      });
-      onSuccess(ideaId);
+      };
+
+      // Explicit wipe when samples disabled (backend will also enforce)
+      if (!sampleAssetAvailable) {
+        assembledIdea.stage3.samplePrice = null;
+        assembledIdea.stage3.sampleSignatureRequired = null;
+        assembledIdea.stage3.sampleAssetAvailable = false;
+        assembledIdea.stage3.sampleProductName = "";
+        assembledIdea.stage3.sampleProductPricePkr = 0;
+        delete assembledIdea.stage2.sampleProductName;
+        delete assembledIdea.stage2.sampleProductPricePkr;
+      }
+
+      // Parent (FounderUnifiedDashboard) owns publishCustomFounderPitch — avoid double writes
+      onSuccess(ideaId, assembledIdea);
+      setSubmitting(false);
+      setStep(0);
+      onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to pitch idea. Please try again.");
-    } finally {
+      setError(err instanceof Error ? err.message : "Failed to compile pitch. Please try again.");
       setSubmitting(false);
     }
   };
@@ -271,7 +494,7 @@ export function PitchIdeaWizard({
               </div>
 
               <div className="space-y-1.5">
-                <Label>Idea Description <span className="text-red-500">*</span></Label>
+                <Label>Business Description <span className="text-red-500">*</span></Label>
                 <textarea
                   className="flex min-h-[70px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#FFA500]"
                   value={description}
@@ -279,6 +502,82 @@ export function PitchIdeaWizard({
                   placeholder="One-paragraph pitch summary for the investor feed..."
                 />
               </div>
+
+              {allowsDigitalProductType ? (
+                <div className="space-y-1.5">
+                  <Label>Product Type <span className="text-red-500">*</span></Label>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#FFA500]"
+                    value={productType}
+                    onChange={(e) => setProductType(e.target.value as "Physical" | "Digital")}
+                  >
+                    <option value="Digital">Digital Product / Service</option>
+                    <option value="Physical">Physical Product</option>
+                  </select>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label>Product Type</Label>
+                  <div className="flex h-9 w-full items-center rounded-md border border-input bg-slate-50 px-3 text-sm text-slate-700">
+                    Physical Product
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    Digital type is only available for Tech / SaaS, Health &amp; Wellness, and EdTech.
+                  </p>
+                </div>
+              )}
+
+              {effectiveProductType === "Physical" && (
+                <div className="space-y-3 rounded-xl border border-dashed border-[#FFA500]/30 bg-[#FFF8E1]/30 p-4 transition-all duration-300">
+                  <p className="text-xs font-bold text-[#FFA500]">Physical Product Configuration</p>
+                  
+                  <div className="space-y-1">
+                    <Label className="text-[11px] text-slate-700">Manufacturing Capacity (Units/Month) <span className="text-red-500">*</span></Label>
+                    <Input
+                      value={manufacturingCapacity}
+                      onChange={(e) => setManufacturingCapacity(e.target.value)}
+                      placeholder="e.g. 5,000 units"
+                      className="h-8 text-xs bg-white"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-[11px] text-slate-700">Logistics & Packaging Type <span className="text-red-500">*</span></Label>
+                    <Input
+                      value={logisticsPackagingType}
+                      onChange={(e) => setLogisticsPackagingType(e.target.value)}
+                      placeholder="e.g. Eco-friendly kraft courier bags"
+                      className="h-8 text-xs bg-white"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-[11px] text-slate-700">
+                      Raw Material Sourcing Hub Location or your own manufacturing plant location{" "}
+                      <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      value={sourcingLocation}
+                      onChange={(e) => setSourcingLocation(e.target.value)}
+                      placeholder="e.g. Central Punjab Cotton Hub / Own manufacturing plant"
+                      className="h-8 text-xs bg-white"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <Label className="text-[11px] text-slate-700">Physical Sample Asset Availability</Label>
+                    <button
+                      type="button"
+                      onClick={() => setSampleAvailability(prev => !prev)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${sampleAvailability ? "bg-[#FFA500]" : "bg-slate-200"}`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${sampleAvailability ? "translate-x-4" : "translate-x-0"}`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label>Core Problem & Solution <span className="text-red-500">*</span></Label>
@@ -293,33 +592,39 @@ export function PitchIdeaWizard({
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label>Required Investment (PKR) <span className="text-red-500">*</span></Label>
-                  <p className="text-[10px] text-slate-400">→ stage2.totalCapitalRequiredPkr</p>
                   <Input
                     type="number"
                     value={investmentAmount}
-                    onChange={(e) => setInvestmentAmount(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInvestmentAmount(val ? String(Number(val)) : "");
+                    }}
                     placeholder="3500000"
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Equity Offered (%) <span className="text-red-500">*</span></Label>
-                  <p className="text-[10px] text-slate-400">→ stage1.equityOffered</p>
                   <Input
                     type="number"
                     min={1}
                     max={100}
                     value={equityPercent}
-                    onChange={(e) => setEquityPercent(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEquityPercent(val ? String(Number(val)) : "");
+                    }}
                     placeholder="15"
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Expected ROI (%) <span className="text-red-500">*</span></Label>
-                  <p className="text-[10px] text-slate-400">→ stage1.expectedRoi</p>
                   <Input
                     type="number"
                     value={roiPercent}
-                    onChange={(e) => setRoiPercent(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setRoiPercent(val ? String(Number(val)) : "");
+                    }}
                     placeholder="18"
                   />
                 </div>
@@ -346,55 +651,63 @@ export function PitchIdeaWizard({
                 Matches Investor <strong>Stage 2 — Financial Requirements & Validation</strong>:
                 capital required, proof gallery, customer base, and market insight.
               </p>
-              <UploadZone
-                label="Product Images"
-                hint="→ stage2.proofGallery (type: product)"
-                required
-                images={productImages}
-                inputRef={productRef}
-                onPick={() => productRef.current?.click()}
-                onFiles={(f) => readFiles(f, setProductImages, 4)}
-                onRemove={(i) => setProductImages((p) => p.filter((_, idx) => idx !== i))}
-              />
 
-              <UploadZone
-                label="Shop / Setup Photos"
-                hint="→ stage2.proofGallery (facility / operations)"
-                required
-                images={setupPhotos}
-                inputRef={setupRef}
-                onPick={() => setupRef.current?.click()}
-                onFiles={(f) => readFiles(f, setSetupPhotos, 4)}
-                onRemove={(i) => setSetupPhotos((p) => p.filter((_, idx) => idx !== i))}
-              />
+              {effectiveProductType === "Digital" ? (
+                <div className="space-y-1.5">
+                  <Label>Product Live Website URL (Link) <span className="text-red-500">*</span></Label>
+                  <Input
+                    value={productLiveUrl}
+                    onChange={(e) => setProductLiveUrl(e.target.value)}
+                    placeholder="https://example.com"
+                  />
+                </div>
+              ) : (
+                <>
+                  <UploadZone
+                    label="Product Images"
+                    required
+                    images={productImages}
+                    inputRef={productRef}
+                    onPick={() => productRef.current?.click()}
+                    onFiles={(f) => readFiles(f, setProductImages, 4)}
+                    onRemove={(i) => setProductImages((p) => p.filter((_, idx) => idx !== i))}
+                  />
 
-              <div className="rounded-2xl border border-dashed border-[#FFA500]/40 bg-[#FFF8E1]/50 p-4">
-                <p className="text-sm font-semibold text-slate-800">Customer List / Ledger</p>
-                <p className="mb-3 text-[11px] text-slate-500">
-                  → stage2.proofGallery + customerLedgerUrl (optional image or PDF)
-                </p>
-                <input
-                  ref={ledgerRef}
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="hidden"
-                  onChange={(e) => readSingle(e.target.files?.[0], setCustomerLedger)}
-                />
-                {customerLedger ? (
-                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-600">
-                    <CheckCircle2 className="h-4 w-4" /> Ledger uploaded
-                    <button type="button" className="text-red-500 underline" onClick={() => setCustomerLedger("")}>Remove</button>
+                  <UploadZone
+                    label="Shop / Setup Photos"
+                    required
+                    images={setupPhotos}
+                    inputRef={setupRef}
+                    onPick={() => setupRef.current?.click()}
+                    onFiles={(f) => readFiles(f, setSetupPhotos, 4)}
+                    onRemove={(i) => setSetupPhotos((p) => p.filter((_, idx) => idx !== i))}
+                  />
+
+                  <div className="rounded-2xl border border-dashed border-[#FFA500]/40 bg-[#FFF8E1]/50 p-4">
+                    <p className="text-sm font-semibold text-slate-800">Customer List / Ledger</p>
+                    <input
+                      ref={ledgerRef}
+                      type="file"
+                      accept="image/*,.pdf"
+                      className="hidden"
+                      onChange={(e) => readSingle(e.target.files?.[0], setCustomerLedger)}
+                    />
+                    {customerLedger ? (
+                      <div className="flex items-center gap-2 text-xs font-bold text-emerald-600">
+                        <CheckCircle2 className="h-4 w-4" /> Ledger uploaded
+                        <button type="button" className="text-red-500 underline" onClick={() => setCustomerLedger("")}>Remove</button>
+                      </div>
+                    ) : (
+                      <Button type="button" variant="outline" size="sm" onClick={() => ledgerRef.current?.click()}>
+                        <UploadCloud className="mr-1 h-3.5 w-3.5" /> Upload Ledger
+                      </Button>
+                    )}
                   </div>
-                ) : (
-                  <Button type="button" variant="outline" size="sm" onClick={() => ledgerRef.current?.click()}>
-                    <UploadCloud className="mr-1 h-3.5 w-3.5" /> Upload Ledger
-                  </Button>
-                )}
-              </div>
+                </>
+              )}
 
               <div className="space-y-1.5">
                 <Label>Existing Customer Base Size</Label>
-                <p className="text-[10px] text-slate-400">→ stage2.customerBaseSize</p>
                 <Input
                   value={customerBaseSize}
                   onChange={(e) => setCustomerBaseSize(e.target.value)}
@@ -405,7 +718,6 @@ export function PitchIdeaWizard({
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Market Location</Label>
-                  <p className="text-[10px] text-slate-400">→ stage2.marketInsight.location</p>
                   <Input
                     value={marketLocation}
                     onChange={(e) => setMarketLocation(e.target.value)}
@@ -414,7 +726,6 @@ export function PitchIdeaWizard({
                 </div>
                 <div className="space-y-1.5">
                   <Label>Years of Experience</Label>
-                  <p className="text-[10px] text-slate-400">→ stage2.founderBackground.yearsExperience</p>
                   <Input
                     type="number"
                     min={0}
@@ -427,34 +738,12 @@ export function PitchIdeaWizard({
 
               <div className="space-y-1.5">
                 <Label>Market Summary</Label>
-                <p className="text-[10px] text-slate-400">→ stage2.marketInsight.marketSummary</p>
                 <textarea
                   className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#FFA500]"
                   value={marketSummary}
                   onChange={(e) => setMarketSummary(e.target.value)}
                   placeholder="Demand trends, local opportunity, growth signals..."
                 />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label>Prior Ventures</Label>
-                  <p className="text-[10px] text-slate-400">→ stage2.founderBackground.priorVentures</p>
-                  <Input
-                    value={founderPriorVentures}
-                    onChange={(e) => setFounderPriorVentures(e.target.value)}
-                    placeholder="e.g. 1 successful exit in F&B"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Education / Credentials</Label>
-                  <p className="text-[10px] text-slate-400">→ stage2.founderBackground.education</p>
-                  <Input
-                    value={founderEducation}
-                    onChange={(e) => setFounderEducation(e.target.value)}
-                    placeholder="e.g. BBA, IoBM Karachi"
-                  />
-                </div>
               </div>
 
               {projections && expenseLines.length > 0 && (
@@ -502,33 +791,32 @@ export function PitchIdeaWizard({
                 auto-generated template (same as seeded investor dossiers via buildStage3For).
               </p>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label>Sample Product Name</Label>
-                  <p className="text-[10px] text-slate-400">→ stage3.sampleProductName</p>
-                  <Input
-                    value={sampleProductName}
-                    onChange={(e) => setSampleProductName(e.target.value)}
-                    placeholder="e.g. Signature Tasting Box"
-                  />
+              {samplesEnabled && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label>Sample Product Name (Signature Box)</Label>
+                    <Input
+                      value={sampleProductName}
+                      onChange={(e) => setSampleProductName(e.target.value)}
+                      placeholder="e.g. Signature Tasting Box"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Sample Product Price (PKR)</Label>
+                    <Input
+                      type="number"
+                      value={sampleProductPricePkr}
+                      onChange={(e) => setSampleProductPricePkr(e.target.value)}
+                      placeholder="2500"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Sample Product Price (PKR)</Label>
-                  <p className="text-[10px] text-slate-400">→ stage3.sampleProductPricePkr</p>
-                  <Input
-                    type="number"
-                    value={sampleProductPricePkr}
-                    onChange={(e) => setSampleProductPricePkr(e.target.value)}
-                    placeholder="2500"
-                  />
-                </div>
-              </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1">
                   <FileText className="h-3.5 w-3.5" /> Custom Agreement Text
                 </Label>
-                <p className="text-[10px] text-slate-400">→ stage3.legalAgreementText</p>
                 <textarea
                   className="flex min-h-[200px] w-full rounded-xl border border-input bg-transparent px-3 py-2 font-mono text-xs leading-relaxed shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#FFA500]"
                   value={agreementText}
@@ -537,29 +825,30 @@ export function PitchIdeaWizard({
                 />
               </div>
 
-              <div className="rounded-2xl border border-dashed border-[#FFA500]/40 bg-[#FFF8E1]/50 p-4">
-                <p className="text-sm font-semibold text-slate-800">Agreement PDF (optional)</p>
-                <p className="mb-3 text-[11px] text-slate-500">→ stage3.agreementPdfUrl</p>
-                <input
-                  ref={agreementPdfRef}
-                  type="file"
-                  accept="application/pdf,image/*"
-                  className="hidden"
-                  onChange={(e) => readSingle(e.target.files?.[0], setAgreementPdf)}
-                />
-                {agreementPdf ? (
-                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-600">
-                    <CheckCircle2 className="h-4 w-4" /> Agreement file attached
-                    <button type="button" className="text-red-500 underline" onClick={() => setAgreementPdf("")}>
-                      Remove
-                    </button>
-                  </div>
-                ) : (
-                  <Button type="button" variant="outline" size="sm" onClick={() => agreementPdfRef.current?.click()}>
-                    <UploadCloud className="mr-1 h-3.5 w-3.5" /> Upload Agreement PDF
-                  </Button>
-                )}
-              </div>
+              {effectiveProductType === "Physical" && (
+                <div className="rounded-2xl border border-dashed border-[#FFA500]/40 bg-[#FFF8E1]/50 p-4">
+                  <p className="text-sm font-semibold text-slate-800">Agreement PDF (optional)</p>
+                  <input
+                    ref={agreementPdfRef}
+                    type="file"
+                    accept="application/pdf,image/*"
+                    className="hidden"
+                    onChange={(e) => readSingle(e.target.files?.[0], setAgreementPdf)}
+                  />
+                  {agreementPdf ? (
+                    <div className="flex items-center gap-2 text-xs font-bold text-emerald-600">
+                      <CheckCircle2 className="h-4 w-4" /> Agreement file attached
+                      <button type="button" className="text-red-500 underline" onClick={() => setAgreementPdf("")}>
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <Button type="button" variant="outline" size="sm" onClick={() => agreementPdfRef.current?.click()}>
+                      <UploadCloud className="mr-1 h-3.5 w-3.5" /> Upload Agreement PDF
+                    </Button>
+                  )}
+                </div>
+              )}
 
               <div className="rounded-2xl border border-[#FFD700]/40 bg-[#FFF8E1] p-4 text-xs text-slate-600">
                 <p className="font-bold text-slate-800 mb-1">Ready to go live?</p>
@@ -624,7 +913,7 @@ function UploadZone({
   onRemove,
 }: {
   label: string;
-  hint: string;
+  hint?: string;
   required?: boolean;
   images: string[];
   inputRef: RefObject<HTMLInputElement | null>;
@@ -637,7 +926,7 @@ function UploadZone({
       <p className="text-sm font-semibold text-slate-800">
         {label} {required && <span className="text-red-500">*</span>}
       </p>
-      <p className="mb-3 text-[11px] text-slate-500">{hint}</p>
+      {hint && <p className="mb-3 text-[11px] text-slate-500">{hint}</p>}
       <input
         ref={inputRef}
         type="file"

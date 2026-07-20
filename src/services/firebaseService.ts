@@ -67,10 +67,19 @@ export const onAuthChange = (callback: (user: User | null) => void) => {
 };
 
 export const getUserRole = async (uid: string) => {
-  const snapshot = await get(ref(database, `users/${uid}`));
-  if (!snapshot.exists()) return null;
-  const data = snapshot.val() as { role?: string };
-  return data?.role ?? null;
+  try {
+    const founderSnap = await get(ref(database, `founders/${uid}/profile`));
+    if (founderSnap.exists()) return "founder";
+
+    const snapshot = await get(ref(database, `users/${uid}`));
+    if (!snapshot.exists()) return null;
+    const data = snapshot.val() as { role?: string };
+    if (data?.role === "founder" || data?.role === "entrepreneur") return null;
+    return data?.role ?? null;
+  } catch (error) {
+    console.error("getUserRole failed:", error);
+    return null;
+  }
 };
 
 // ============================================================================
@@ -163,13 +172,17 @@ export interface InvestorProfile {
 }
 
 export const saveInvestorProfile = async (uid: string, profile: InvestorProfile) => {
-  await set(ref(database, RTDB.investors(uid)), {
+  const authUid = String(uid || "").trim();
+  if (!authUid) throw new Error("uid is required for investor profile.");
+  // Write ONLY under investors/{uid}/profile — never overwrite sibling investments/payment_desk
+  await update(ref(database, `investors/${authUid}/profile`), {
     ...profile,
-    uid,
-    createdAt: Date.now()
+    uid: authUid,
+    role: "investor",
+    createdAt: Date.now(),
   });
-  await set(ref(database, RTDB.userDirectoryEntry(uid)), {
-    uid,
+  await set(ref(database, RTDB.userDirectoryEntry(authUid)), {
+    uid: authUid,
     name: profile.name,
     email: profile.email,
     role: "investor",
@@ -536,14 +549,24 @@ export interface Investment {
   createdAt?: number;
 }
 
-export const addInvestment = async (investment: Investment) => {
-  const newRef = push(ref(database, `${RTDB.investors(investment.investorId)}/investments`));
-  await set(newRef, {
-    ...investment,
-    status: 'completed',
-    createdAt: Date.now()
+export const addInvestment = async (investment: Investment & { pitchId?: string; ideaId?: string }) => {
+  const investorId = String(investment.investorId || "").trim();
+  const pitchId = String(investment.pitchId || investment.ideaId || "").trim();
+  if (!investorId) throw new Error("investorId (auth uid) is required.");
+  // Sibling key under investors/{uid}/investments/{pitchId} — NEVER push() a new root or random id
+  if (!pitchId) {
+    throw new Error("pitchId is required — refuse push()-generated investment keys.");
+  }
+  await update(ref(database), {
+    [`investors/${investorId}/investments/${pitchId}`]: {
+      ...investment,
+      investorId,
+      pitchId,
+      status: investment.status || "completed",
+      createdAt: Date.now(),
+    },
   });
-  return newRef.key;
+  return pitchId;
 };
 
 export const getInvestmentsByInvestor = async (investorId: string) => {

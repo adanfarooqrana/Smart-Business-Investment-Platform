@@ -14,35 +14,65 @@ export async function hydrateBusinessFromRtdb(
   registerBusiness: RegisterBusiness,
   fallback?: { name?: string; email?: string; password?: string },
 ): Promise<void> {
-  const [biz, userSnap] = await Promise.all([
+  const [biz, userSnap, ownerProfileSnap] = await Promise.all([
     getBusinessProfile(uid).catch(() => null),
     get(ref(database, RTDB.users(uid))).catch(() => null),
+    get(ref(database, `business_owners/${uid}/profile`)).catch(() => null),
   ]);
 
   const userVal = userSnap?.exists() ? (userSnap.val() as Record<string, unknown>) : null;
   const b = (biz ?? {}) as Record<string, unknown>;
+  const ownerProfile = ownerProfileSnap?.exists()
+    ? (ownerProfileSnap.val() as Record<string, unknown>)
+    : null;
 
-  if (biz || userVal) {
+  const resolvedName =
+    String(
+      ownerProfile?.businessName ||
+        ownerProfile?.fullName ||
+        ownerProfile?.storeName ||
+        b.businessName ||
+        b.name ||
+        userVal?.businessName ||
+        userVal?.fullName ||
+        userVal?.name ||
+        fallback?.name ||
+        "",
+    ).trim() || "My Business Store";
+
+  const resolvedEmail = String(
+    b.email ?? userVal?.email ?? fallback?.email ?? "",
+  ).trim();
+
+  if (biz || userVal || ownerProfile) {
     registerBusiness({
       uid,
-      name: String(b.name ?? userVal?.name ?? fallback?.name ?? ""),
-      email: String(b.email ?? userVal?.email ?? fallback?.email ?? ""),
-      phone: String(b.phone ?? userVal?.phone ?? ""),
+      name: resolvedName,
+      email: resolvedEmail,
+      phone: String(
+        b.phone ?? userVal?.phone ?? userVal?.phoneNumber ?? ownerProfile?.phone ?? "",
+      ),
       password: fallback?.password,
-      category: String(b.category ?? ""),
-      subcategory: String(b.subcategory ?? ""),
-      location: String(b.location ?? ""),
-      size: String(b.size ?? ""),
+      category: String(
+        b.category ?? ownerProfile?.coreCategory ?? ownerProfile?.category ?? "",
+      ),
+      subcategory: String(b.subcategory ?? ownerProfile?.subcategory ?? ""),
+      location: String(
+        b.location ?? ownerProfile?.operationalLocation ?? ownerProfile?.location ?? "",
+      ),
+      size: String(b.size ?? ownerProfile?.teamSize ?? ""),
       website: String(b.website ?? ""),
-      about: String(b.about ?? b.landingPageAbout ?? ""),
-      registerNumber: String(b.registerNumber ?? ""),
-      trademark: String(b.trademark ?? ""),
+      about: String(
+        b.about ?? b.landingPageAbout ?? ownerProfile?.pitch ?? "",
+      ),
+      registerNumber: String(b.registerNumber ?? ownerProfile?.registerNumber ?? ""),
+      trademark: String(b.trademark ?? ownerProfile?.trademarkNumber ?? ownerProfile?.trademark ?? ""),
       score: Number(b.score ?? 75),
       visitors: Number(b.visitors ?? 0),
       profileCompletion: Number(b.profileCompletion ?? 75),
       landingPageCreated: Boolean(b.landingPageCreated),
       landingPageTemplate: String(b.landingPageTemplate ?? ""),
-      landingPageAbout: String(b.landingPageAbout ?? ""),
+      landingPageAbout: String(b.landingPageAbout ?? ownerProfile?.pitch ?? ""),
       isRegistered: true,
       isApproved: Boolean(b.isApproved ?? true),
     });
@@ -52,7 +82,7 @@ export async function hydrateBusinessFromRtdb(
   if (fallback?.email) {
     registerBusiness({
       uid,
-      name: fallback.name ?? fallback.email.split("@")[0],
+      name: resolvedName,
       email: fallback.email,
       password: fallback.password,
       phone: "",
@@ -90,8 +120,20 @@ export function useBusinessSession() {
     }
 
     if (business.isRegistered && isLoggedIn && role === "business") {
-      setSessionReady(true);
-      return;
+      const emailPrefix = String(business.email || "")
+        .split("@")[0]
+        .trim();
+      const storedName = String(business.name || "").trim();
+      const nameLooksBroken =
+        !storedName ||
+        storedName === emailPrefix ||
+        /^\d+$/.test(storedName);
+
+      if (!nameLooksBroken) {
+        setSessionReady(true);
+        return;
+      }
+      // Fall through — re-hydrate from business_owners/{uid}/profile
     }
 
     const uid = currentUser?.uid ?? business.uid;
@@ -109,7 +151,7 @@ export function useBusinessSession() {
     let cancelled = false;
 
     hydrateBusinessFromRtdb(uid, registerBusiness, {
-      name: userData?.name ?? business.name,
+      name: String(userData?.businessName ?? userData?.name ?? business.name ?? "").trim(),
       email: userData?.email ?? business.email ?? currentUser?.email ?? undefined,
     })
       .catch((err) => console.warn("Business session hydration failed:", err))

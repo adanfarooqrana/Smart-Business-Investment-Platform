@@ -13,6 +13,8 @@ import {
   Boxes,
   Lightbulb,
   BarChart3,
+  Globe,
+  LineChart,
 } from "lucide-react";
 import {
   Sidebar,
@@ -46,9 +48,10 @@ export function AppSidebar() {
       return [
         { title: "Ai Website Generate And Manage", url: "/app/score", icon: Gauge },
         { title: "Live Visitors & Reviews", url: "/app/analytics", icon: BarChart3 },
+        { title: "Orders & Revenue Analytics", url: "/dashboard/orders", icon: LineChart },
         { title: "AI Strategy Consultant", url: "/app/consultant", icon: Bot },
         { title: "Wholesale Sourcing Hub", url: "/app/wholesale", icon: Boxes },
-        ...commonItems,
+        { title: "Community Lounge", url: "/app/community", icon: MessageSquare },
       ];
     } else if (isLoggedIn && role === "investor") {
       return [
@@ -82,8 +85,10 @@ export function AppSidebar() {
 
   // Retrieve initials for Avatar
   const getAvatarInitials = () => {
-    if (isLoggedIn && role === "business" && business.name) {
-      return business.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+    if (isLoggedIn && role === "business") {
+      const businessName =
+        String(business.name || "").trim() || "My Business Store";
+      return businessName.charAt(0).toUpperCase() || "B";
     }
     if (isLoggedIn && role === "investor" && investor.name) {
       return investor.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
@@ -98,7 +103,9 @@ export function AppSidebar() {
   };
 
   const getProfileTitle = () => {
-    if (isLoggedIn && role === "business") return business.name || "Luna Bistro";
+    if (isLoggedIn && role === "business") {
+      return String(business.name || "").trim() || "My Business Store";
+    }
     if (isLoggedIn && role === "investor") return investor.name || "Vanguard Ventures";
     if (isLoggedIn && role === "consultant") return consultant.name || "Sarah Sterling";
     if (isLoggedIn && role === "entrepreneur") return entrepreneur.name || "Founder";

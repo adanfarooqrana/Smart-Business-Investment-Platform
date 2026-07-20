@@ -1,5 +1,6 @@
 import {
   collection,
+  collectionGroup,
   doc,
   setDoc,
   getDoc,
@@ -35,6 +36,8 @@ import {
 
 export {
   PITCH_CATEGORIES,
+  isDigitalProductCategory,
+  DIGITAL_PRODUCT_CATEGORIES,
   type PitchCategory,
   type PitchStage1Input,
   type PitchStage2Input,
@@ -268,7 +271,7 @@ function assembleStartupIdea(
 
 export async function pitchIdea(payload: PitchIdeaPayload): Promise<string> {
   const entrepreneurUid = resolveEntrepreneurUid(payload.entrepreneurUid);
-  const ideaId = generateIdeaId();
+  const ideaId = payload.editIdeaId || generateIdeaId();
   const { stage1: s1, stage2: s2, stage3: s3 } = payload;
   const projections =
     payload.projections ??
@@ -332,6 +335,15 @@ export async function pitchIdea(payload: PitchIdeaPayload): Promise<string> {
 
   await Promise.all([
     setDoc(doc(db, "investment_ideas", ideaId), {
+      ...docs.investmentIdea,
+      createdAt: serverTimestamp(),
+    }),
+    setDoc(doc(db, "pitches", ideaId), {
+      ...docs.investmentIdea,
+      uid: entrepreneurUid,
+      createdAt: serverTimestamp(),
+    }),
+    setDoc(doc(db, "users", entrepreneurUid, "pitches", ideaId), {
       ...docs.investmentIdea,
       createdAt: serverTimestamp(),
     }),
@@ -495,6 +507,12 @@ function assembleStartupIdeaFromFeed(
   ideaId: string,
   feed: Record<string, unknown>,
 ): StartupIdea | null {
+  if (!feed || typeof feed !== "object") return null;
+
+  const stage1Doc = ((feed.stage1 && typeof feed.stage1 === "object" ? feed.stage1 : feed) || {}) as Record<string, unknown>;
+  const stage2Doc = ((feed.stage2 && typeof feed.stage2 === "object" ? feed.stage2 : feed) || {}) as Record<string, unknown>;
+  const stage3Doc = ((feed.stage3 && typeof feed.stage3 === "object" ? feed.stage3 : feed) || {}) as Record<string, unknown>;
+
   const investmentIdea = (
     feed.investmentIdea && typeof feed.investmentIdea === "object"
       ? feed.investmentIdea
@@ -502,28 +520,80 @@ function assembleStartupIdeaFromFeed(
   ) as Record<string, unknown>;
 
   const startupTitle = String(
-    investmentIdea.startupTitle ?? feed.startupTitle ?? feed.title ?? "",
-  );
+    stage1Doc.ideaTitle ??
+      stage1Doc.startupTitle ??
+      investmentIdea.startupTitle ??
+      feed.startupTitle ??
+      feed.title ??
+      feed.ideaTitle ??
+      feed.businessName ??
+      "",
+  ).trim();
+
   if (!startupTitle) return null;
 
-  const stage1Doc = (feed.stage1 ?? {}) as Record<string, unknown>;
-  const stage2Doc = (feed.stage2 ?? {}) as Record<string, unknown>;
-  const stage3Doc = (feed.stage3 ?? {}) as Record<string, unknown>;
-  const createdAt = Number(feed.createdAt ?? investmentIdea.createdAt ?? 0) || undefined;
+  const industry = String(
+    stage1Doc.categoryIndustry ??
+      stage1Doc.industry ??
+      investmentIdea.industry ??
+      feed.industry ??
+      feed.categoryIndustry ??
+      feed.category ??
+      "SaaS / Tech",
+  ).trim();
 
-  return assembleStartupIdea(
+  const description = String(
+    stage1Doc.ideaDescription ??
+      stage1Doc.description ??
+      investmentIdea.description ??
+      feed.description ??
+      feed.ideaDescription ??
+      stage1Doc.coreProblemSolution ??
+      "",
+  ).trim();
+
+  const productType = String(
+    stage1Doc.productType ??
+      feed.productType ??
+      "Physical Product",
+  );
+
+  const founderName = String(
+    investmentIdea.founderName ??
+      feed.founderName ??
+      feed.fullName ??
+      "Verified Founder",
+  );
+
+  const createdAt = Number(feed.createdAt ?? feed.publishedAt ?? investmentIdea.createdAt ?? Date.now()) || Date.now();
+
+  const assembled = assembleStartupIdea(
     {
       id: ideaId,
       ...investmentIdea,
       startupTitle,
-      founderName: investmentIdea.founderName ?? feed.founderName,
-      description: investmentIdea.description ?? feed.description,
+      industry,
+      description,
+      founderName,
+      productType,
     },
     stage1Doc,
     stage2Doc,
     stage3Doc,
     { createdAt, isFounderLive: true },
   );
+
+  // Guarantee stage1 nested fields exist
+  assembled.stage1 = {
+    ...assembled.stage1,
+    ideaTitle: startupTitle,
+    categoryIndustry: industry,
+    ideaDescription: description,
+    productType,
+  };
+  (assembled as any).productType = productType;
+
+  return assembled;
 }
 
 function sortIdeasNewestFirst(ideas: StartupIdea[]): StartupIdea[] {
@@ -612,15 +682,16 @@ function subscribeToInvestorFeedRtdb(
   );
 }
 
-/** Live listener for all pitched ideas — RTDB investor_feed (primary) + Firestore mirror. */
+/** Live listener for all pitched ideas — RTDB investor_feed + collectionGroup('pitches') + founders/{uid}/pitches. */
 export function subscribeToAllPitchedIdeas(
   callback: (ideas: StartupIdea[]) => void,
 ): () => void {
   const rtdbIdeas = new Map<string, StartupIdea>();
   const fsIdeas = new Map<string, StartupIdea>();
+  const foundersPitches = new Map<string, StartupIdea>();
 
   const emit = () => {
-    const merged = new Map<string, StartupIdea>([...fsIdeas, ...rtdbIdeas]);
+    const merged = new Map<string, StartupIdea>([...fsIdeas, ...foundersPitches, ...rtdbIdeas]);
     callback(sortIdeasNewestFirst(Array.from(merged.values())));
   };
 
@@ -630,20 +701,84 @@ export function subscribeToAllPitchedIdeas(
     emit();
   });
 
+  const unsubFsGroup = onSnapshot(
+    collectionGroup(db, "pitches"),
+    (snap) => {
+      snap.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const assembled = assembleStartupIdeaFromFeed(docSnap.id, data);
+        if (assembled) {
+          fsIdeas.set(docSnap.id, { ...assembled, isFounderLive: true });
+        }
+      });
+      emit();
+    },
+    (err) => {
+      console.warn("Collection group 'pitches' snapshot listener notice:", err);
+    },
+  );
+
   const unsubFs = subscribeToPitchedIdeaCollection(
     query(collection(db, "investment_ideas"), orderBy("createdAt", "desc")),
     (ideas) => {
-      fsIdeas.clear();
       for (const idea of ideas) fsIdeas.set(idea.id, { ...idea, isFounderLive: true });
       emit();
     },
   );
 
+  const unsubFoundersRtdb = onValue(
+    ref(database, "founders"),
+    (snap) => {
+      foundersPitches.clear();
+      if (snap.exists()) {
+        snap.forEach((founderChild) => {
+          const pitchesSnap = founderChild.child("pitches");
+          if (pitchesSnap.exists()) {
+            pitchesSnap.forEach((pitchChild) => {
+              const feed = pitchChild.val() as Record<string, unknown>;
+              const assembled = assembleStartupIdeaFromFeed(pitchChild.key!, feed);
+              if (assembled) {
+                foundersPitches.set(pitchChild.key!, { ...assembled, isFounderLive: true });
+              }
+            });
+          }
+        });
+      }
+      emit();
+    },
+    (err) => {
+      console.warn("RTDB founders pitches listener notice:", err);
+    },
+  );
+
+  const unsubRootPitchesRtdb = onValue(
+    ref(database, "pitches"),
+    (snap) => {
+      if (snap.exists()) {
+        snap.forEach((pitchChild) => {
+          const feed = pitchChild.val() as Record<string, unknown>;
+          const assembled = assembleStartupIdeaFromFeed(pitchChild.key!, feed);
+          if (assembled) {
+            foundersPitches.set(pitchChild.key!, { ...assembled, isFounderLive: true });
+          }
+        });
+      }
+      emit();
+    },
+    (err) => {
+      console.warn("RTDB root pitches listener notice:", err);
+    },
+  );
+
   return () => {
     unsubRtdb();
+    unsubFsGroup();
     unsubFs();
+    unsubFoundersRtdb();
+    unsubRootPitchesRtdb();
     rtdbIdeas.clear();
     fsIdeas.clear();
+    foundersPitches.clear();
   };
 }
 

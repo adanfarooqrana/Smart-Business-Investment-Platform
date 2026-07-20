@@ -11,6 +11,8 @@ export type StartupIdeaStage3 = {
   milestones: Milestone[];
   sampleProductName: string;
   sampleProductPricePkr: number;
+  /** Founder toggle — investors only see sample UI when true */
+  sampleAssetAvailable?: boolean;
   socialProof: {
     investorCount: number;
     totalInvestedPkr: number;

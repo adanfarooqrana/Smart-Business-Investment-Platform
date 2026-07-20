@@ -67,10 +67,11 @@ export const saveEntrepreneur = (data) => {
   return writeData(`entrepreneurs/${uid}`, withTimestamps({ ...data, uid }));
 };
 
-/** Save an investor profile under /investors/{uid}. */
+/** Save an investor profile under /investors/{uid}/profile (never wipe sibling branches). */
 export const saveInvestor = (data) => {
   const uid = data.uid || data.id;
-  return writeData(`investors/${uid}`, withTimestamps({ ...data, uid }));
+  if (!uid) return Promise.reject(new Error("uid is required for saveInvestor"));
+  return updateData(`investors/${uid}/profile`, withTimestamps({ ...data, uid, role: "investor" }));
 };
 
 /**

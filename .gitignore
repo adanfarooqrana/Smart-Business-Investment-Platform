@@ -16,6 +16,20 @@ dist-ssr
 .nitro
 *.local
 
+# Secrets / env
+.env
+.env.*
+!.env.example
+
+# KYC engine local artifacts
+kyc-engine/venv/
+kyc-engine/.pip-cache/
+kyc-engine/.temp/
+kyc-engine/uploads/
+kyc-engine/__pycache__/
+**/__pycache__/
+*.pyc
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars

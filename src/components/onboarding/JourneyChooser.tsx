@@ -546,15 +546,10 @@ export function JourneyChooser({ onSelect, onLogin }: JourneyChooserProps) {
         </p>
       </div>
 
-      {/* Main layout: analytics | wheel | (mobile analytics below) */}
-      <div className="grid w-full items-center gap-8 lg:grid-cols-[minmax(260px,300px)_1fr_minmax(260px,300px)] lg:gap-6">
-        {/* Left analytics — desktop only */}
-        <div className="hidden lg:block">
-          <RoleAnalyticsPanel role={active} animateKey={animTick} roles={ROLES} />
-        </div>
-
+      {/* Centered selector wheel */}
+      <div className="flex w-full justify-center items-center py-4">
         {/* Clockwise orbit selector */}
-        <div className="relative mx-auto flex h-[420px] w-full max-w-[440px] items-center justify-center">
+        <div className="relative flex h-[420px] w-full max-w-[440px] items-center justify-center">
           <div
             className="absolute h-[330px] w-[330px] rounded-full border-2 border-dashed transition-colors duration-700"
             style={{
@@ -651,38 +646,6 @@ export function JourneyChooser({ onSelect, onLogin }: JourneyChooserProps) {
           >
             <RotateCw className="h-3.5 w-3.5" /> Rotate
           </button>
-        </div>
-
-        {/* Right — growth trend panel */}
-        <div className="hidden lg:flex lg:flex-col lg:items-center lg:justify-center">
-          <TrendSparkPanel role={active} animateKey={animTick} />
-        </div>
-      </div>
-
-      {/* Mobile analytics */}
-      <div className="mt-6 w-full max-w-md lg:hidden">
-        <RoleAnalyticsPanel role={active} animateKey={animTick} roles={ROLES} />
-      </div>
-      {/* Active role detail card */}
-      <div key={active.id} className="mt-6 w-full max-w-md animate-in fade-in slide-in-from-bottom-3 duration-400">
-        <div
-          className="rounded-2xl border bg-white/85 p-5 text-center shadow-lg backdrop-blur-md transition-colors duration-500"
-          style={{ borderColor: `${active.color}33` }}
-        >
-          <p className="text-sm leading-relaxed text-slate-600">{active.blurb}</p>
-          <div className="mt-3 flex flex-wrap justify-center gap-2">
-            {active.perks.map((perk, idx) => {
-              const PerkIcon = PERK_ICONS[idx % PERK_ICONS.length];
-              return (
-                <span
-                  key={perk}
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold ${active.chip}`}
-                >
-                  <PerkIcon className="h-3 w-3" /> {perk}
-                </span>
-              );
-            })}
-          </div>
         </div>
       </div>
 

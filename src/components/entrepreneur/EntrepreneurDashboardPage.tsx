@@ -13,18 +13,18 @@ import {
 } from "@/services/entrepreneurService";
 import { Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { KycPendingGate } from "@/components/kyc/KycPendingGate";
+import { streamUserKycStatus } from "@/services/adminKycService";
 
 export function EntrepreneurDashboardPage() {
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { currentUser, loading: authLoading } = useAuth();
   const { sessionReady, isFounderRegistered } = useFounderSession();
   const {
     entrepreneur,
     sampleOrders,
     investorEntrepreneurMessages,
     stage1InvestorQueries,
-    replyInvestorMessage,
-    resolveInvestorMessage,
     submitEntrepreneurProblem,
     entrepreneurPayments,
     advanceSampleOrderStage,
@@ -34,10 +34,23 @@ export function EntrepreneurDashboardPage() {
 
   const [firestoreProfile, setFirestoreProfile] = useState<EntrepreneurProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
-  const [liveUnread, setLiveUnread] = useState<number | null>(null);
+  const [kycPending, setKycPending] = useState(false);
+  const [kycChecked, setKycChecked] = useState(false);
 
   const founderUid = currentUser?.uid || entrepreneur?.uid || "";
   const { ideas: myIdeas } = useFounderPitchedIdeas(founderUid || undefined);
+
+  useEffect(() => {
+    if (!founderUid) {
+      setKycChecked(true);
+      setKycPending(false);
+      return;
+    }
+    return streamUserKycStatus(founderUid, (r) => {
+      setKycPending(r?.kycStatus === "pending" || r?.kycStatus === "rejected");
+      setKycChecked(true);
+    });
+  }, [founderUid]);
 
   useEffect(() => {
     if (!founderUid) return;
@@ -75,14 +88,12 @@ export function EntrepreneurDashboardPage() {
     return {
       investorsViewedIdea: investorViews,
       activeSampleRequests: activeSamples,
-      unreadMessagesCount:
-        liveUnread ??
-        Math.max(
-          pendingMessages,
-          firestoreProfile?.metrics.unreadMessagesCount ??
-            entrepreneur?.metrics?.unreadMessagesCount ??
-            0,
-        ),
+      unreadMessagesCount: Math.max(
+        pendingMessages,
+        firestoreProfile?.metrics.unreadMessagesCount ??
+          entrepreneur?.metrics?.unreadMessagesCount ??
+          0,
+      ),
     };
   }, [
     firestoreProfile,
@@ -90,7 +101,6 @@ export function EntrepreneurDashboardPage() {
     investorEntrepreneurMessages,
     sampleOrders,
     stage1InvestorQueries,
-    liveUnread,
   ]);
 
   const fundingRaised = useMemo(
@@ -103,7 +113,7 @@ export function EntrepreneurDashboardPage() {
     [communityPosts],
   );
 
-  if (!sessionReady) {
+  if (!sessionReady || authLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center" style={{ background: "#1a1a2e" }}>
         <p className="text-sm text-[#FFD700] animate-pulse">Loading Founder Dashboard...</p>
@@ -134,6 +144,27 @@ export function EntrepreneurDashboardPage() {
             Sign In
           </Button>
         </div>
+      </div>
+    );
+  }
+
+  if (!kycChecked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center" style={{ background: "#1a1a2e" }}>
+        <p className="text-sm text-[#FFD700] animate-pulse">Checking KYC approval…</p>
+      </div>
+    );
+  }
+
+  if (kycPending && founderUid) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+        <KycPendingGate
+          uid={founderUid}
+          role="founder"
+          email={entrepreneur?.email || currentUser?.email || ""}
+          approvedPath="/founder/dashboard"
+        />
       </div>
     );
   }
@@ -178,6 +209,7 @@ export function EntrepreneurDashboardPage() {
       email={firestoreProfile?.email || entrepreneur?.email}
       phone={firestoreProfile?.phone || entrepreneur?.phone}
       paymentType={firestoreProfile?.paymentType || entrepreneur?.paymentType}
+      bankAccountNumber={firestoreProfile?.bankAccountNumber || (entrepreneur as any)?.bankAccountNumber}
       isVerified={firestoreProfile?.isVerified ?? entrepreneur?.isApproved}
       ideaVision={firestoreProfile?.ideaVision}
       ideaInterest={firestoreProfile?.ideaInterest}
@@ -185,7 +217,6 @@ export function EntrepreneurDashboardPage() {
       metrics={metrics}
       myIdeas={myIdeas}
       sampleOrders={sampleOrders || []}
-      investorMessages={investorEntrepreneurMessages || []}
       entrepreneurPayments={entrepreneurPayments || []}
       totalFollowers={getFollowingCount()}
       problemsSolved={problemsSolved}
@@ -204,10 +235,7 @@ export function EntrepreneurDashboardPage() {
           aiResolution: data.routingSummary,
         })
       }
-      onReplyMessage={replyInvestorMessage}
-      onResolveMessage={resolveInvestorMessage}
       onAdvanceSample={advanceSampleOrderStage}
-      onUnreadChange={setLiveUnread}
     />
     </FounderDashboardErrorBoundary>
   );

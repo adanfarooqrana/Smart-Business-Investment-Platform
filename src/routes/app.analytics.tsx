@@ -1,11 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
 import { useAppState } from "@/hooks/useAppState";
+import { db, auth } from "../firebase";
+import { ref, onValue } from "firebase/database";
 import {
-  Globe, Star, TrendingUp, TrendingDown, Minus, Users, Eye,
-  CheckCircle2, AlertCircle, AlertTriangle, BarChart3, MessageSquare,
-  Calendar, Search, ArrowUp, ArrowDown, Package, Bot, Send, Loader2,
-  Link2, RefreshCw, ChevronDown, Zap,
+  Globe, TrendingUp, Minus, Users, Eye,
+  CheckCircle2, AlertCircle, BarChart3, MessageSquare,
+  Package, Bot, Send, Loader2,
+  Link2, RefreshCw, Zap,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -13,7 +15,6 @@ import {
 } from "recharts";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -21,42 +22,9 @@ export const Route = createFileRoute("/app/analytics")({
   component: AnalyticsPage,
 });
 
-// ── Fake data generators ────────────────────────────────────────────────────
-
-function generateVisitorData(days: number) {
-  const data = [];
-  const now = new Date();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    data.push({ date: label, visitors: Math.floor(80 + Math.random() * 220) });
-  }
-  return data;
+function dayIdFromDate(d: Date): string {
+  return `${d.getFullYear()}_${String(d.getMonth() + 1).padStart(2, "0")}_${String(d.getDate()).padStart(2, "0")}`;
 }
-
-const ALL_VISITOR_DATA = generateVisitorData(90); // 3 months of daily data
-
-const MOCK_REVIEWS = [
-  { id: 1, name: "Aisha Khan", product: "Chocolate Fudge Cake", rating: 5, sentiment: "positive", text: "Absolutely divine! The fudge was rich and the layers were perfect. Will order again!", date: "2026-06-20" },
-  { id: 2, name: "Bilal Ahmed", product: "Almond Croissant", rating: 4, sentiment: "positive", text: "Buttery, flaky, and fresh. The almond paste inside was just the right sweetness.", date: "2026-06-19" },
-  { id: 3, name: "Sara Mahmood", product: "Anniversary Fondant Cake", rating: 2, sentiment: "negative", text: "Delivery was late and the fondant cracked. Very disappointed for an anniversary order.", date: "2026-06-18" },
-  { id: 4, name: "Usman Ali", product: "Chocolate Fudge Cake", rating: 4, sentiment: "positive", text: "Great taste! Could be a bit cheaper for the size but quality is top-notch.", date: "2026-06-17" },
-  { id: 5, name: "Fatima Noor", product: "Almond Croissant", rating: 3, sentiment: "neutral", text: "Average croissant. Nothing exceptional but decent for the price.", date: "2026-06-16" },
-  { id: 6, name: "Hamza Sheikh", product: "Anniversary Fondant Cake", rating: 5, sentiment: "positive", text: "Perfect cake for our 10th anniversary! Beautiful design and tasted amazing.", date: "2026-06-15" },
-  { id: 7, name: "Mariam Iqbal", product: "Chocolate Fudge Cake", rating: 1, sentiment: "negative", text: "Cake arrived damaged and dry. Not what I expected at all. Very bad experience.", date: "2026-06-14" },
-  { id: 8, name: "Zainab Shah", product: "Almond Croissant", rating: 5, sentiment: "positive", text: "Best croissants in Lahore! Fresh every morning and the almond filling is heavenly.", date: "2026-06-13" },
-  { id: 9, name: "Omar Farooq", product: "Anniversary Fondant Cake", rating: 3, sentiment: "neutral", text: "The cake was okay. Fondant was a bit too sweet for my taste but the design was nice.", date: "2026-06-12" },
-  { id: 10, name: "Hina Baig", product: "Chocolate Fudge Cake", rating: 5, sentiment: "positive", text: "Ordered for my birthday and everyone loved it! The fudge ganache was incredible.", date: "2026-06-11" },
-];
-
-const PRODUCTS = ["All Products", "Chocolate Fudge Cake", "Almond Croissant", "Anniversary Fondant Cake"];
-
-const SENTIMENT_COLORS = {
-  positive: "#10b981",
-  negative: "#f43f5e",
-  neutral: "#94a3b8",
-};
 
 const DATE_PRESETS = [
   { label: "Today", days: 1 },
@@ -72,38 +40,113 @@ function AnalyticsPage() {
   const { isLoggedIn, role, business } = useAppState();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (!isLoggedIn || role !== "business" || !business.isRegistered) {
-      navigate({ to: "/app/login" });
-    }
-  }, [isLoggedIn, role, business.isRegistered, navigate]);
-
   // ── Website link state ──
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [isLinked, setIsLinked] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
+
+  // Live Firebase reviews & visitors
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [visitorDaily, setVisitorDaily] = useState<Record<string, number>>({});
 
   // ── Visitor state ──
   const [visitorPreset, setVisitorPreset] = useState(7);
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [isCustomRange, setIsCustomRange] = useState(false);
-  const todayVisitors = ALL_VISITOR_DATA[ALL_VISITOR_DATA.length - 1]?.visitors ?? 0;
+
+  useEffect(() => {
+    if (!isLoggedIn || role !== "business" || !business.isRegistered) {
+      navigate({ to: "/app/login" });
+      return;
+    }
+
+    const uid = auth.currentUser?.uid || business.uid;
+    if (!uid) return;
+
+    // 1. Subscribe to profile/subdomain to auto-populate websiteUrl input
+    const profileRef = ref(db, `business_owners/${uid}/profile`);
+    const unsubProfile = onValue(profileRef, (snap) => {
+      if (snap.exists()) {
+        const profile = snap.val();
+        if (profile.subdomain) {
+          const isLocalhost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+          const domain = isLocalhost
+            ? `http://localhost:5173/site/${profile.subdomain}`
+            : `https://${profile.subdomain}.smartbiz.com`;
+          setWebsiteUrl(domain);
+          setIsLinked(true);
+        }
+      }
+    });
+
+    // 2. Subscribe to product-specific reviews and flatten them for NLP analytics
+    const reviewsRef = ref(db, `business_owners/${uid}/products`);
+    const unsubReviews = onValue(reviewsRef, (snap) => {
+      if (snap.exists()) {
+        const products = snap.val();
+        const list = Object.keys(products).flatMap((productId) => {
+          const product = products[productId];
+          const productReviews = product?.reviews || {};
+          return Object.keys(productReviews).map((reviewId) => {
+            const review = productReviews[reviewId];
+            const rating = Number(review.rating) || 0;
+            return {
+              id: `${productId}:${reviewId}`,
+              name: review.customer_name || "Customer",
+              product: product.name || productId,
+              productId,
+              rating,
+              sentiment: rating >= 4 ? "positive" : rating <= 2 ? "negative" : "neutral",
+              text: review.review_text || "",
+              date: review.timestamp ? new Date(review.timestamp).toLocaleDateString() : "",
+              createdAt: review.timestamp || 0,
+            };
+          });
+        });
+        list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        setReviews(list);
+      } else {
+        setReviews([]);
+      }
+    });
+
+    // 3. Real daily visitor counts
+    const visitorsRef = ref(db, `business_owners/${uid}/visitor_daily`);
+    const unsubVisitors = onValue(visitorsRef, (snap) => {
+      setVisitorDaily(snap.exists() ? snap.val() : {});
+    });
+
+    return () => {
+      unsubProfile();
+      unsubReviews();
+      unsubVisitors();
+    };
+  }, [isLoggedIn, role, business.isRegistered, navigate, business.uid]);
 
   const visitorChartData = useMemo(() => {
-    if (isCustomRange && customFrom && customTo) {
-      const from = new Date(customFrom);
-      const to = new Date(customTo);
-      return ALL_VISITOR_DATA.filter((d) => {
-        const date = new Date(d.date);
-        return date >= from && date <= to;
-      });
+    const days = isCustomRange ? 7 : visitorPreset;
+    const data = [];
+    const now = new Date();
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      const id = dayIdFromDate(d);
+      data.push({ date: label, visitors: Number(visitorDaily[id] || 0) });
     }
-    return ALL_VISITOR_DATA.slice(-visitorPreset);
-  }, [visitorPreset, isCustomRange, customFrom, customTo]);
+    return data;
+  }, [visitorDaily, visitorPreset, isCustomRange]);
 
-  const totalVisitors = visitorChartData.reduce((s, d) => s + d.visitors, 0);
+  const totalVisitors = useMemo(
+    () => visitorChartData.reduce((s, d) => s + d.visitors, 0),
+    [visitorChartData]
+  );
   const avgDaily = Math.round(totalVisitors / (visitorChartData.length || 1));
+  const todayVisitors = Number(visitorDaily[dayIdFromDate(new Date())] || 0);
+  const peakVisitors = visitorChartData.length
+    ? Math.max(...visitorChartData.map((d) => d.visitors), 0)
+    : 0;
 
   // ── Reviews state ──
   const [selectedProduct, setSelectedProduct] = useState("All Products");
@@ -112,13 +155,16 @@ function AnalyticsPage() {
   const [isAiThinking, setIsAiThinking] = useState(false);
 
   const filteredReviews = useMemo(() => {
-    if (selectedProduct === "All Products") return MOCK_REVIEWS;
-    return MOCK_REVIEWS.filter((r) => r.product === selectedProduct);
-  }, [selectedProduct]);
+    if (selectedProduct === "All Products") return reviews;
+    return reviews.filter((r) => r.product === selectedProduct);
+  }, [reviews, selectedProduct]);
 
   const sentimentCounts = useMemo(() => {
     const counts = { positive: 0, negative: 0, neutral: 0 };
-    filteredReviews.forEach((r) => counts[r.sentiment as keyof typeof counts]++);
+    filteredReviews.forEach((r) => {
+      const sentiment = r.sentiment || (r.rating >= 4 ? "positive" : r.rating <= 2 ? "negative" : "neutral");
+      counts[sentiment as keyof typeof counts]++;
+    });
     return counts;
   }, [filteredReviews]);
 
@@ -129,21 +175,25 @@ function AnalyticsPage() {
     { name: "Neutral", value: sentimentCounts.neutral, color: "#94a3b8" },
   ];
 
+  const productsList = useMemo(() => {
+    return ["All Products", ...new Set(reviews.map((r) => r.product).filter(Boolean))];
+  }, [reviews]);
+
   const productStats = useMemo(() => {
-    return PRODUCTS.slice(1).map((prod) => {
-      const revs = MOCK_REVIEWS.filter((r) => r.product === prod);
-      const pos = revs.filter((r) => r.sentiment === "positive").length;
-      const neg = revs.filter((r) => r.sentiment === "negative").length;
-      const neu = revs.filter((r) => r.sentiment === "neutral").length;
-      const avgRating = revs.reduce((s, r) => s + r.rating, 0) / (revs.length || 1);
-      return { name: prod, positive: pos, negative: neg, neutral: neu, total: revs.length, avgRating: Math.round(avgRating * 10) / 10 };
+    return productsList.slice(1).map((prod) => {
+      const revs = reviews.filter((r) => r.product === prod);
+      const pos = revs.filter((r) => r.sentiment === "positive" || r.rating >= 4).length;
+      const neg = revs.filter((r) => r.sentiment === "negative" || r.rating <= 2).length;
+      const neu = revs.filter((r) => r.sentiment === "neutral" || (!r.sentiment && r.rating === 3)).length;
+      const avgRating = revs.reduce((s, r) => s + (Number(r.rating) || 0), 0) / (revs.length || 1);
+      return { name: prod, positive: pos, negative: neg, neutral: neu, total: revs.length, avgRating: isNaN(avgRating) ? 0 : Math.round(avgRating * 10) / 10 };
     });
-  }, []);
+  }, [reviews, productsList]);
 
   const handleLinkWebsite = () => {
     if (!websiteUrl.trim()) { alert("Please enter your website URL."); return; }
     setIsLinking(true);
-    setTimeout(() => { setIsLinking(false); setIsLinked(true); }, 1400);
+    setTimeout(() => { setIsLinking(false); setIsLinked(true); }, 800);
   };
 
   const handleAskAI = () => {
@@ -154,21 +204,30 @@ function AnalyticsPage() {
     setTimeout(() => {
       let answer = "";
       if (q.includes("worst") || q.includes("remove") || q.includes("bad")) {
-        const worst = productStats.sort((a, b) => b.negative - a.negative)[0];
-        answer = `Based on sentiment data, "${worst.name}" has the most negative reviews (${worst.negative} out of ${worst.total}). Consider reviewing your recipe or packaging. ${worst.negative > 1 ? "I'd recommend gathering more feedback before removing it from the menu." : "Monitor closely over the next 30 days."}`;
+        const worst = [...productStats].sort((a, b) => b.negative - a.negative)[0];
+        if (!worst || worst.total === 0) {
+          answer = "You don't have enough review data yet to pinpoint negative outliers. Keep gathering reviews!";
+        } else {
+          answer = `Based on sentiment data, "${worst.name}" has the most negative reviews (${worst.negative} out of ${worst.total}). Consider reviewing your recipe or packaging. ${worst.negative > 1 ? "I'd recommend gathering more feedback before removing it from the menu." : "Monitor closely over the next 30 days."}`;
+        }
       } else if (q.includes("best") || q.includes("popular") || q.includes("positive")) {
-        const best = productStats.sort((a, b) => b.positive - a.positive)[0];
-        answer = `"${best.name}" is your star product with ${best.positive} positive reviews and an average rating of ${best.avgRating}/5. Consider promoting it more prominently on your landing page.`;
+        const best = [...productStats].sort((a, b) => b.positive - a.positive)[0];
+        if (!best || best.total === 0) {
+          answer = "No highly rated products found in your database reviews yet. Share your store link with customers to get feedback!";
+        } else {
+          answer = `"${best.name}" is your star product with ${best.positive} positive reviews and an average rating of ${best.avgRating}/5. Consider promoting it more prominently on your landing page.`;
+        }
       } else if (q.includes("visitor") || q.includes("traffic")) {
         answer = `In the last ${visitorPreset} days, you had ${totalVisitors.toLocaleString()} total visitors with a daily average of ${avgDaily}. Today alone you received ${todayVisitors} visitors. Your traffic is growing — consider adding a promotional offer to convert more visitors to customers.`;
       } else if (q.includes("neutral")) {
         answer = `You have ${sentimentCounts.neutral} neutral reviews overall. Neutral reviews often mean customers are satisfied but not wowed. Try adding a loyalty discount or personalised follow-up message to turn them into promoters.`;
       } else {
-        answer = `Based on your analytics: You have ${sentimentCounts.positive} positive, ${sentimentCounts.negative} negative, and ${sentimentCounts.neutral} neutral reviews. Your top performer is "${productStats.sort((a, b) => b.avgRating - a.avgRating)[0]?.name}". Daily visitors average ${avgDaily}. Would you like a deeper breakdown of any specific product or time range?`;
+        const topProd = [...productStats].sort((a, b) => b.avgRating - a.avgRating)[0];
+        answer = `Based on your analytics: You have ${sentimentCounts.positive} positive, ${sentimentCounts.negative} negative, and ${sentimentCounts.neutral} neutral reviews. ${topProd ? `Your top performer is "${topProd.name}".` : ""} Daily visitors average ${avgDaily}. Would you like a deeper breakdown of any specific product or time range?`;
       }
       setAiAnswer(answer);
       setIsAiThinking(false);
-    }, 1800);
+    }, 1200);
   };
 
   if (!isLoggedIn || role !== "business" || !business.isRegistered) {
@@ -278,8 +337,8 @@ function AnalyticsPage() {
                     <Eye className="h-5 w-5" />
                   </div>
                 </div>
-                <div className="mt-3 text-[10px] text-emerald-600 font-bold flex items-center gap-1">
-                  <ArrowUp className="h-3 w-3" /> +12% vs yesterday
+                <div className="mt-3 text-[10px] text-slate-500 font-bold flex items-center gap-1">
+                  <Minus className="h-3 w-3" /> From live storefront visits
                 </div>
               </CardContent>
             </Card>
@@ -307,15 +366,15 @@ function AnalyticsPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Peak Day</p>
-                    <p className="text-4xl font-black text-slate-900 mt-1">{Math.max(...visitorChartData.map((d) => d.visitors)).toLocaleString()}</p>
+                    <p className="text-4xl font-black text-slate-900 mt-1">{peakVisitors.toLocaleString()}</p>
                     <p className="text-xs text-slate-500 mt-0.5">Most visits in a day</p>
                   </div>
                   <div className="h-10 w-10 rounded-2xl bg-violet-500/10 flex items-center justify-center text-violet-500">
                     <TrendingUp className="h-5 w-5" />
                   </div>
                 </div>
-                <div className="mt-3 text-[10px] text-violet-600 font-bold flex items-center gap-1">
-                  <ArrowUp className="h-3 w-3" /> Record high this period
+                <div className="mt-3 text-[10px] text-slate-500 font-bold flex items-center gap-1">
+                  <Minus className="h-3 w-3" /> Based on visitor_daily
                 </div>
               </CardContent>
             </Card>
@@ -408,7 +467,7 @@ function AnalyticsPage() {
 
           {/* Product Filter */}
           <div className="flex items-center gap-2 mb-5 flex-wrap">
-            {PRODUCTS.map((p) => (
+            {productsList.map((p) => (
               <button
                 key={p}
                 onClick={() => setSelectedProduct(p)}
@@ -459,32 +518,38 @@ function AnalyticsPage() {
                   <CardDescription className="text-xs text-slate-500">{filteredReviews.length} reviews for {selectedProduct}</CardDescription>
                 </CardHeader>
                 <CardContent className="p-4 space-y-3 max-h-[320px] overflow-y-auto">
-                  {filteredReviews.map((rev) => (
-                    <div key={rev.id} className={`rounded-xl p-3.5 border flex flex-col gap-1.5 ${
-                      rev.sentiment === "positive" ? "bg-emerald-500/4 border-emerald-100" :
-                      rev.sentiment === "negative" ? "bg-rose-500/4 border-rose-100" :
-                      "bg-slate-50 border-slate-200"
-                    }`}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <span className="text-xs font-extrabold text-slate-800">{rev.name}</span>
-                          <span className="text-[10px] text-slate-400 ml-2">{rev.date}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <Badge className={`text-[9px] font-bold px-2 py-0.5 rounded-full border-none ${
-                            rev.sentiment === "positive" ? "bg-emerald-100 text-emerald-700" :
-                            rev.sentiment === "negative" ? "bg-rose-100 text-rose-700" :
-                            "bg-slate-200 text-slate-600"
-                          }`}>
-                            {rev.sentiment}
-                          </Badge>
-                          <span className="text-[10px] text-[#D97706] font-bold">{"★".repeat(rev.rating)}{"☆".repeat(5 - rev.rating)}</span>
-                        </div>
-                      </div>
-                      <p className="text-[11px] text-slate-400 font-semibold">{rev.product}</p>
-                      <p className="text-xs text-slate-700 leading-relaxed italic">"{rev.text}"</p>
+                  {filteredReviews.length === 0 ? (
+                    <div className="text-center py-12 text-slate-400 font-semibold text-xs">
+                      No reviews received yet. Share your store link with customers to get feedback!
                     </div>
-                  ))}
+                  ) : (
+                    filteredReviews.map((rev) => (
+                      <div key={rev.id} className={`rounded-xl p-3.5 border flex flex-col gap-1.5 ${
+                        rev.sentiment === "positive" ? "bg-emerald-500/4 border-emerald-100" :
+                        rev.sentiment === "negative" ? "bg-rose-500/4 border-rose-100" :
+                        "bg-slate-50 border-slate-200"
+                      }`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="text-xs font-extrabold text-slate-800">{rev.name}</span>
+                            <span className="text-[10px] text-slate-400 ml-2">{rev.date || new Date(rev.createdAt || Date.now()).toLocaleDateString()}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Badge className={`text-[9px] font-bold px-2 py-0.5 rounded-full border-none ${
+                              rev.sentiment === "positive" ? "bg-emerald-100 text-emerald-700" :
+                              rev.sentiment === "negative" ? "bg-rose-100 text-rose-700" :
+                              "bg-slate-200 text-slate-600"
+                            }`}>
+                              {rev.sentiment || (rev.rating >= 4 ? "positive" : rev.rating <= 2 ? "negative" : "neutral")}
+                            </Badge>
+                            <span className="text-[10px] text-[#D97706] font-bold">{"★".repeat(rev.rating)}{"☆".repeat(5 - rev.rating)}</span>
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-slate-400 font-semibold">{rev.product}</p>
+                        <p className="text-xs text-slate-700 leading-relaxed italic">"{rev.text}"</p>
+                      </div>
+                    ))
+                  )}
                 </CardContent>
               </Card>
             </div>

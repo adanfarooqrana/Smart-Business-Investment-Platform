@@ -1,57 +1,14 @@
 import { createFileRoute, Outlet, useRouterState, Link } from "@tanstack/react-router";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
-import { useAppState } from "@/hooks/useAppState";
-import { useState } from "react";
-import { Sparkles, Terminal, ChevronDown, ChevronUp, RefreshCw, Briefcase, Eye, Bot, Boxes } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/app")({
   component: AppLayout,
 });
 
 function AppLayout() {
-  const { role, setRole, registerBusiness, registerInvestor, registerConsultant, resetState, business, investor, isLoggedIn } = useAppState();
-  const [isOpen, setIsOpen] = useState(false);
-  const [isCommunityOpen, setIsCommunityOpen] = useState(false);
   const pathname = useRouterState({ select: (r) => r.location.pathname });
-
-  const simulateBusiness = () => {
-    registerBusiness({
-      name: "Luna Bistro",
-      category: "Food & Beverage",
-      location: "San Francisco, USA",
-      size: "12 team members",
-      website: "https://lunabistro.smartbiz.ai",
-      about: "A organic farm-to-table bistro focusing on high quality lunch items.",
-      score: 87
-    });
-  };
-
-  const simulateInvestor = () => {
-    registerInvestor({
-      name: "Vanguard Ventures",
-      categories: ["Food & Beverage", "SaaS / Tech"],
-      budgetRange: "500k-5M PKR",
-      ticketSize: "500k-5M PKR",
-      location: "Karachi, Pakistan",
-      strategy: "Early stage growth with strong reputation scores and positive reviewer sentiment."
-    });
-  };
-
-  const simulateConsultant = () => {
-    registerConsultant({
-      name: "Sarah Sterling",
-      email: "sarah@consultant.com",
-      phone: "+92 300 1234567",
-      specialty: "Mobile Accessories",
-      experience: "National Shipping",
-      location: "Lahore, Pakistan",
-      bio: "Verified wholesaler supplying high-quality products to local retail businesses.",
-      isRegistered: true,
-      isApproved: true,
-    });
-  };
 
   const isAuthPage = pathname === "/app/register" || pathname === "/app/login";
   const isCommunityPage = pathname === "/app/community";
@@ -91,7 +48,7 @@ function AppLayout() {
             {/* Right Side items */}
             <div className="flex items-center gap-3 shrink-0">
               
-              {/* Join Community Button styled as white background, black text */}
+              {/* Join Community Button */}
               <Link
                 to="/app/community"
                 className="inline-flex items-center gap-1.5 rounded-full bg-white border border-slate-200 px-4.5 py-2 text-sm font-bold text-slate-900 hover:bg-slate-50 transition duration-200 shadow-sm cursor-pointer animate-pulse-glow"
@@ -124,7 +81,7 @@ function AppLayout() {
           </div>
         </header>
 
-        {/* Content Body — flush, no gap */}
+        {/* Content Body */}
         <div className="flex-1 w-full">
           <Outlet />
         </div>
@@ -137,91 +94,6 @@ function AppLayout() {
       <div className="flex min-h-screen w-full bg-slate-50 font-display">
         <AppSidebar />
         <div className="flex flex-1 flex-col min-w-0 overflow-x-hidden">
-          {pathname !== "/app/score" && (
-            <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur-xl">
-              <div className="flex items-center gap-3">
-                <SidebarTrigger />
-                <div className="text-sm text-slate-400">
-                  Workspace &middot; <span className="font-bold text-slate-900 capitalize">{role === "consultant" ? "Wholesaler" : role} Mode</span>
-                </div>
-              </div>
-              {/* Minimal Header Dev Indicator */}
-              <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50/80 px-3.5 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-100 transition-colors"
-              >
-                <Terminal className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
-                <span>Dev Controls</span>
-                {isOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              </button>
-            </header>
-          )}
-
-          {/* Dev Controller Drawer/Panel */}
-          {isOpen && (
-            <div className="border-b border-slate-200 bg-white p-4 animate-in slide-in-from-top duration-200 shadow-sm">
-              <div className="mx-auto max-w-5xl">
-                <div className="flex items-center gap-2 mb-3">
-                  <Sparkles className="h-4 w-4 text-amber-500" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-slate-900">Ecosystem Sandbox Simulator</span>
-                </div>
-                <div className="flex flex-wrap gap-2 items-center text-sm">
-                  <span className="text-slate-500 mr-2 text-xs font-medium">Active Simulator:</span>
-                  <Button
-                    size="sm"
-                    variant={role === "guest" ? "default" : "outline"}
-                    onClick={() => {
-                      resetState();
-                      setRole("guest");
-                    }}
-                    className={role === "guest" ? "bg-slate-900 text-white rounded-full" : "rounded-full border-slate-200"}
-                  >
-                    <Eye className="h-3.5 w-3.5 mr-1" /> Guest / Public
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={role === "business" ? "default" : "outline"}
-                    onClick={simulateBusiness}
-                    className={role === "business" ? "bg-slate-900 text-white rounded-full" : "rounded-full border-slate-200"}
-                  >
-                    <Briefcase className="h-3.5 w-3.5 mr-1" /> Business Owner (Luna Bistro)
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={role === "investor" ? "default" : "outline"}
-                    onClick={simulateInvestor}
-                    className={role === "investor" ? "bg-slate-900 text-white rounded-full" : "rounded-full border-slate-200"}
-                  >
-                    <Sparkles className="h-3.5 w-3.5 mr-1" /> Investor (Vanguard Ventures)
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={role === "consultant" ? "default" : "outline"}
-                    onClick={simulateConsultant}
-                    className={role === "consultant" ? "bg-amber-500 text-white hover:bg-amber-600 rounded-full" : "rounded-full border-slate-200"}
-                  >
-                    <Boxes className="h-3.5 w-3.5 mr-1" /> Wholesaler (Sarah Sterling)
-                  </Button>
-                  <div className="h-4 w-px bg-slate-200 mx-2 hidden sm:block" />
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      resetState();
-                      setIsOpen(false);
-                    }}
-                    className="text-red-500 hover:bg-red-50 hover:text-red-600 ml-auto rounded-full"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5 mr-1" /> Wipe Data
-                  </Button>
-                </div>
-                <p className="mt-2.5 text-[11px] text-slate-400">
-                  *Quick-switches let you immediately view dashboards, score pages, or simulated investor offers without filling forms.
-                </p>
-              </div>
-            </div>
-          )}
-
           <main className="flex-1">
             <Outlet />
           </main>
@@ -230,4 +102,5 @@ function AppLayout() {
     </SidebarProvider>
   );
 }
+
 

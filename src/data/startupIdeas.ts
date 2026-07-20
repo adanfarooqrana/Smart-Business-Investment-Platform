@@ -20,6 +20,14 @@ export type StartupIdeaStage1 = {
   ebitdaEstimate: string;
   equityOffered: string;
   industryField: string;
+  /** Authentic founder wizard fields (founders/{uid}/pitches/{id}.stage1) */
+  ideaTitle?: string;
+  categoryIndustry?: string;
+  productType?: string;
+  coreProblemSolution?: string;
+  requiredInvestmentPkr?: number;
+  equityOfferedPercent?: number;
+  expectedRoiPercent?: number;
 };
 
 export type StartupIdeaStage2 = {
@@ -45,6 +53,7 @@ export type StartupIdeaStage2 = {
     viabilityRating: "High" | "Medium" | "Moderate";
   };
   proofGallery: ProofImage[];
+  productLiveUrl?: string;
 };
 
 export type StartupIdeaStage3 = import("@/data/stage3Data").StartupIdeaStage3;
@@ -63,6 +72,10 @@ export type StartupIdea = {
   createdAt?: number;
   /** True when loaded live from founder pitch (RTDB investor_feed) */
   isFounderLive?: boolean;
+  /** Parent founders/{uid} key for nested pitch documents */
+  founderId?: string;
+  /** Alias of founderId for messaging / legacy callers */
+  entrepreneurUid?: string;
 };
 
 type StartupIdeaRaw = Omit<StartupIdea, "stage3">;
@@ -432,5 +445,10 @@ export function mergeStartupIdeas(
 }
 
 export function isFounderPitchedIdea(idea: StartupIdea): boolean {
-  return idea.isFounderLive === true || idea.id.startsWith("pitch-");
+  return (
+    idea.isFounderLive === true ||
+    Boolean(idea.founderId || idea.entrepreneurUid) ||
+    idea.id.startsWith("pitch-") ||
+    idea.id.startsWith("PITCH-")
+  );
 }

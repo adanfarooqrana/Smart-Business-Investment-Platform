@@ -1,35 +1,38 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppState, type InvestorProfile } from "@/hooks/useAppState";
-import { getInvestorProfile } from "@/services/firebaseService";
+import { fetchInvestorProfile } from "@/services/investorCoreService";
 
 type RegisterInvestor = (profile: Partial<InvestorProfile>) => void;
 
-/** Load investor profile from RTDB into useAppState (localStorage). */
+/** Load investor profile from RTDB investors/{uid}/profile into useAppState. */
 export async function hydrateInvestorFromRtdb(
   uid: string,
   registerInvestor: RegisterInvestor,
   fallback?: { name?: string; email?: string; password?: string },
 ): Promise<void> {
-  const profile = await getInvestorProfile(uid);
+  try {
+    const profile = await fetchInvestorProfile(uid);
 
-  if (profile) {
-    registerInvestor({
-      name: String(profile.name ?? fallback?.name ?? ""),
-      email: String(profile.email ?? fallback?.email ?? ""),
-      phone: String(profile.phone ?? ""),
-      password: fallback?.password,
-      categories: Array.isArray(profile.categories) ? profile.categories : [],
-      ticketSize: String(profile.ticketSize ?? ""),
-      budgetRange: (profile.budgetRange as InvestorProfile["budgetRange"]) ?? "",
-      location: String(profile.location ?? ""),
-      strategy: String(profile.strategy ?? ""),
-      entityType: profile.entityType as InvestorProfile["entityType"],
-      cnicFront: profile.cnicFront,
-      cnicBack: profile.cnicBack,
-      liveSelfie: profile.liveSelfie,
-    });
-    return;
+    if (profile) {
+      registerInvestor({
+        name: String(profile.fullName ?? fallback?.name ?? ""),
+        email: String(profile.email ?? fallback?.email ?? ""),
+        phone: String(profile.mobilePhoneForOtp ?? ""),
+        password: fallback?.password,
+        categories: [],
+        ticketSize: "",
+        budgetRange: "",
+        location: "Pakistan",
+        strategy: profile.bankDetails?.bankName
+          ? `Bank: ${profile.bankDetails.bankName}`
+          : "",
+        entityType: "Normal Person",
+      });
+      return;
+    }
+  } catch (error) {
+    console.error("hydrateInvestorFromRtdb error:", error);
   }
 
   if (fallback?.email) {
