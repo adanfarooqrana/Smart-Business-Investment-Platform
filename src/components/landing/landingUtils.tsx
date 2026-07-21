@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export const ROTATING_PHRASES = [
-  "brand design",
-  "business scaling",
-  "AI automation",
-  "pitching investors",
+  "Business Manage in one dashboard",
+  "Business Receive Funding",
+  "Investors",
+  "Wholesalers",
 ];
 
 export function CountUp({

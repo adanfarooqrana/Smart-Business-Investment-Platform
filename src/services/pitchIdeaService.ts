@@ -96,19 +96,35 @@ async function uploadPitchFile(
   fileName: string,
   dataUrl: string,
 ): Promise<string> {
-  if (!dataUrl.startsWith("data:")) return dataUrl;
+  if (!dataUrl) return "";
+  if (!dataUrl.startsWith("data:") && /^https?:\/\//i.test(dataUrl)) return dataUrl;
   try {
-    const fileRef = storageRef(storage, `uploads/${uid}/pitches/${ideaId}/${folder}/${fileName}`);
-    const snapshot = await Promise.race([
-      uploadString(fileRef, dataUrl, "data_url"),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("upload timeout")), 20000),
-      ),
-    ]);
-    return await getDownloadURL(snapshot.ref);
+    const { uploadToCloudinary } = await import("@/lib/cloudinaryUpload");
+    const cloudFolder =
+      folder === "products"
+        ? "product_photos"
+        : folder === "setup"
+          ? "product_photos"
+          : folder === "agreement"
+            ? "payment_receipts"
+            : "product_images";
+    return await uploadToCloudinary(dataUrl, cloudFolder);
   } catch (err) {
-    console.warn(`Pitch file upload failed (${folder}), using inline data:`, err);
-    return dataUrl;
+    console.warn(`Cloudinary pitch upload failed (${folder}/${fileName}):`, err);
+    // Fall back to Firebase Storage if Cloudinary fails
+    try {
+      const fileRef = storageRef(storage, `uploads/${uid}/pitches/${ideaId}/${folder}/${fileName}`);
+      const snapshot = await Promise.race([
+        uploadString(fileRef, dataUrl, "data_url"),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("upload timeout")), 20000),
+        ),
+      ]);
+      return await getDownloadURL(snapshot.ref);
+    } catch (err2) {
+      console.warn(`Pitch file upload failed (${folder}), using inline data:`, err2);
+      return dataUrl;
+    }
   }
 }
 
@@ -287,6 +303,7 @@ export async function pitchIdea(payload: PitchIdeaPayload): Promise<string> {
       uploadPitchFile(entrepreneurUid, ideaId, "setup", `setup-${i}.jpg`, dataUrl),
     ),
   );
+  const productPhotoUrl = productUrls[0] || "";
   let customerLedgerUrl = s2.customerLedgerUrl;
   if (customerLedgerUrl?.startsWith("data:")) {
     customerLedgerUrl = await uploadPitchFile(
@@ -336,19 +353,29 @@ export async function pitchIdea(payload: PitchIdeaPayload): Promise<string> {
   await Promise.all([
     setDoc(doc(db, "investment_ideas", ideaId), {
       ...docs.investmentIdea,
+      productPhotoUrl: productPhotoUrl || null,
+      productImages: productUrls,
       createdAt: serverTimestamp(),
     }),
     setDoc(doc(db, "pitches", ideaId), {
       ...docs.investmentIdea,
       uid: entrepreneurUid,
+      productPhotoUrl: productPhotoUrl || null,
+      productImages: productUrls,
       createdAt: serverTimestamp(),
     }),
     setDoc(doc(db, "users", entrepreneurUid, "pitches", ideaId), {
       ...docs.investmentIdea,
+      productPhotoUrl: productPhotoUrl || null,
+      productImages: productUrls,
       createdAt: serverTimestamp(),
     }),
     setDoc(doc(db, "stage1_data", ideaId), docs.stage1Data),
-    setDoc(doc(db, "stage2_data", ideaId), docs.stage2Data),
+    setDoc(doc(db, "stage2_data", ideaId), {
+      ...docs.stage2Data,
+      productPhotoUrl: productPhotoUrl || null,
+      productImages: productUrls,
+    }),
     setDoc(doc(db, "stage3_data", ideaId), docs.stage3Data),
   ]).catch((err) => {
     console.warn("Firestore pitch mirror failed (RTDB feed is live):", err);

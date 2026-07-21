@@ -17,6 +17,7 @@ export const USER_ROLES = {
   INVESTOR: "investor",
   WHOLESALER: "wholesaler",
   BUSINESS_OWNER: "business_owner",
+  COMMUNITY_MEMBER: "community_member",
 } as const;
 
 export type UserRole = (typeof USER_ROLES)[keyof typeof USER_ROLES];
@@ -28,12 +29,14 @@ const ROLE_COLLECTION: Record<UserRole, string> = {
   investor: "investors",
   wholesaler: "wholesalers",
   business_owner: "users",
+  community_member: "community_members",
 };
 
 function roleProfilePath(role: UserRole, uid: string): string | null {
   if (role === "founder") return `founders/${uid}/profile`;
   if (role === "business_owner") return `business_owners/${uid}/profile`;
   if (role === "investor") return `investors/${uid}/profile`;
+  if (role === "community_member") return `community_members/${uid}`;
   const collection = ROLE_COLLECTION[role];
   return collection ? `${collection}/${uid}` : null;
 }
@@ -119,48 +122,115 @@ async function fetchUserData(uid: string): Promise<AppUserData | null> {
       /* non-fatal */
     }
 
+    // Business owners / users node BEFORE community_members
+    // (prevents workspace accounts from being misclassified as community_member)
     const snapshot = await get(ref(database, `users/${uid}`));
-    if (!snapshot.exists()) return null;
-    const data = snapshot.val() as AppUserData;
+    if (snapshot.exists()) {
+      const data = snapshot.val() as AppUserData;
 
-    // Legacy entrepreneur role must still resolve via nested founders profile
-    if (data.role === "entrepreneur" || data.role === "founder") {
-      return null;
-    }
-
-    // Business owners: display name lives under business_owners/{uid}/profile.businessName
-    if (data.role === "business_owner") {
-      try {
-        const ownerSnap = await get(ref(database, `business_owners/${uid}/profile`));
-        if (ownerSnap.exists()) {
-          const profile = ownerSnap.val() as Record<string, unknown>;
-          const businessName = String(
-            profile.businessName ?? profile.fullName ?? profile.storeName ?? "",
-          ).trim();
-          return {
-            ...data,
-            uid,
-            name:
-              businessName ||
-              String(data.fullName ?? data.name ?? "").trim() ||
-              "My Business Store",
-            email: String(data.email ?? ""),
-            role: "business_owner",
-            createdAt: Number(data.createdAt ?? Date.now()),
-            businessName: businessName || undefined,
-            fullName: String(data.fullName ?? profile.fullName ?? ""),
-          };
+      if (data.role === "business_owner") {
+        try {
+          const ownerSnap = await get(ref(database, `business_owners/${uid}/profile`));
+          if (ownerSnap.exists()) {
+            const profile = ownerSnap.val() as Record<string, unknown>;
+            const businessName = String(
+              profile.businessName ?? profile.fullName ?? profile.storeName ?? "",
+            ).trim();
+            return {
+              ...data,
+              uid,
+              name:
+                businessName ||
+                String(data.fullName ?? data.name ?? "").trim() ||
+                "My Business Store",
+              email: String(data.email ?? ""),
+              role: "business_owner",
+              createdAt: Number(data.createdAt ?? Date.now()),
+              businessName: businessName || undefined,
+              fullName: String(data.fullName ?? profile.fullName ?? ""),
+            };
+          }
+        } catch {
+          /* non-fatal */
         }
-      } catch {
-        /* non-fatal */
+        return {
+          ...data,
+          uid,
+          role: "business_owner",
+          name: String(data.name ?? data.fullName ?? "").trim() || "Business Owner",
+          email: String(data.email ?? ""),
+        };
+      }
+
+      if (data.role && data.role !== "community_member" && data.role !== "entrepreneur" && data.role !== "founder") {
+        return {
+          ...data,
+          name: String(data.name ?? data.fullName ?? "").trim(),
+          email: String(data.email ?? ""),
+        };
+      }
+
+      // Legacy entrepreneur/founder under users → ignore here (founders path already checked)
+      if (data.role === "entrepreneur" || data.role === "founder") {
+        /* fall through */
       }
     }
 
-    return {
-      ...data,
-      name: String(data.name ?? data.fullName ?? "").trim(),
-      email: String(data.email ?? ""),
-    };
+    // Also detect business_owners profile even if users/{uid} is incomplete
+    try {
+      const ownerSnap = await get(ref(database, `business_owners/${uid}/profile`));
+      if (ownerSnap.exists()) {
+        const profile = ownerSnap.val() as Record<string, unknown>;
+        const businessName = String(
+          profile.businessName ?? profile.fullName ?? profile.storeName ?? "",
+        ).trim();
+        return {
+          uid,
+          name: businessName || String(profile.fullName ?? profile.name ?? "").trim() || "Business Owner",
+          email: String(profile.email ?? ""),
+          role: "business_owner",
+          createdAt: Number(profile.createdAt ?? Date.now()),
+          businessName: businessName || undefined,
+          fullName: String(profile.fullName ?? ""),
+        };
+      }
+    } catch {
+      /* non-fatal */
+    }
+
+    // Community members LAST — only if no workspace profile exists
+    try {
+      const cmSnap = await get(ref(database, `community_members/${uid}`));
+      if (cmSnap.exists()) {
+        const profile = cmSnap.val() as Record<string, unknown>;
+        return {
+          uid,
+          name: String(profile.name ?? profile.fullName ?? ""),
+          email: String(profile.email ?? ""),
+          role: "community_member",
+          createdAt: Number(profile.createdAt ?? Date.now()),
+          ...profile,
+        };
+      }
+    } catch {
+      /* non-fatal */
+    }
+
+    // users/{uid} with community_member (or incomplete) after workspace checks failed
+    if (snapshot.exists()) {
+      const data = snapshot.val() as AppUserData;
+      if (data.role === "community_member") {
+        return {
+          ...data,
+          uid,
+          role: "community_member",
+          name: String(data.name ?? data.fullName ?? "").trim(),
+          email: String(data.email ?? ""),
+        };
+      }
+    }
+
+    return null;
   } catch (err) {
     console.warn("fetchUserData failed:", err);
     return null;
@@ -232,6 +302,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return user;
       }
 
+      if (role === "community_member") {
+        await set(
+          ref(database, `community_members/${user.uid}`),
+          stripUndefined({
+            uid: user.uid,
+            name,
+            email,
+            role: "community_member",
+            createdAt,
+            emailVerified: false,
+            canPost: false,
+            canLikeComment: true,
+          }),
+        );
+        await set(ref(database, `users/${user.uid}`), {
+          ...baseProfile,
+          role: "community_member",
+        });
+        await set(ref(database, `user_directory/${user.uid}`), {
+          uid: user.uid,
+          name,
+          email,
+          role: "community_member",
+          createdAt,
+        });
+        lastUserRef.current = user;
+        lastUserDataRef.current = baseProfile;
+        setCurrentUser(user);
+        setUserData(baseProfile);
+        void syncPlatformStatsToRtdb();
+        return user;
+      }
+
       await set(ref(database, `users/${user.uid}`), baseProfile);
 
       await set(ref(database, `user_directory/${user.uid}`), {
@@ -293,6 +396,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       lastUserDataRef.current = null;
       setCurrentUser(null);
       setUserData(null);
+
+      // Wipe auth caches so Landing → Community cannot inherit a workspace session
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.removeItem("smartbiz_community_session");
+          localStorage.removeItem("token");
+          localStorage.removeItem("session_token");
+          localStorage.removeItem("auth_token");
+          sessionStorage.removeItem("smartbiz_community_entry");
+        } catch {
+          /* ignore */
+        }
+      }
     } catch (error) {
       intentionalLogoutRef.current = false;
       console.error("logout failed:", error);

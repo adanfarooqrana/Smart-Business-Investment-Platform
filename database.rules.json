@@ -114,9 +114,18 @@
       }
     },
 
+    "community_members": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+
     "community_posts": {
       ".read": true,
-      ".write": "auth != null"
+      "$postId": {
+        ".write": "auth != null && ((!data.exists() && (root.child('business_owners').child(auth.uid).exists() || root.child('entrepreneurs').child(auth.uid).exists() || root.child('founders').child(auth.uid).exists() || root.child('investors').child(auth.uid).exists())) || (data.exists() && (root.child('business_owners').child(auth.uid).exists() || root.child('entrepreneurs').child(auth.uid).exists() || root.child('founders').child(auth.uid).exists() || root.child('investors').child(auth.uid).exists() || ((root.child('community_members').child(auth.uid).exists() || root.child('investors').child(auth.uid).exists() || root.child('wholesalers').child(auth.uid).exists() || root.child('business_owners').child(auth.uid).exists() || root.child('entrepreneurs').child(auth.uid).exists() || root.child('founders').child(auth.uid).exists()) && newData.child('title').val() == data.child('title').val() && newData.child('content').val() == data.child('content').val() && newData.child('author').val() == data.child('author').val() && (!data.hasChild('proofAttachment') || newData.child('proofAttachment').val() == data.child('proofAttachment').val())))))"
+      }
     },
 
     "messages": {

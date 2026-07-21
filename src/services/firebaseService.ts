@@ -369,13 +369,18 @@ export interface CommunityPost {
   entrepreneurProblem?: boolean;
   entrepreneurTargetRole?: string;
   founderProblemId?: string;
+  authorName?: string;
+  businessName?: string;
+  authorUid?: string;
   createdAt?: number;
 }
 
 export const addCommunityPost = async (post: CommunityPost) => {
   const newRef = push(ref(database, 'community_posts'));
+  const authorUid = auth.currentUser?.uid || null;
   await set(newRef, {
     ...post,
+    ...(authorUid ? { authorUid } : {}),
     votes: post.votes || 0,
     shares: post.shares || 0,
     createdAt: Date.now()
@@ -793,99 +798,10 @@ export const recalculateAndSaveScore = async (
 // ============================================================================
 
 const seedCommunityPosts = async () => {
-  const postsRef = ref(database, 'community_posts');
-  const snapshot = await get(postsRef);
-  
-  if (!snapshot.exists() || snapshot.val() === null) {
-    const defaultPosts = [
-      { 
-        author: "u/growth_hacker_pk", 
-        role: "consultant", 
-        badge: "Verified Consultant", 
-        category: "Insight Board", 
-        tag: "Prediction",
-        avatarColor: "bg-blue-600", 
-        title: "Future Market Prediction: Gujranwala Wholesale demand shifts to Biodegradable items", 
-        content: "I predict that eco-friendly packaging demand in the Gujranwala cluster will surge by over 45% in the next quarter due to local green retail initiatives.", 
-        votes: 38, 
-        shares: 0, 
-        isPrediction: true, 
-        predictionStatus: "active", 
-        predictionExpiryTime: Date.now() + 86400000,
-        createdAt: Date.now()
-      },
-      { 
-        author: "u/coffee_bean_founder", 
-        role: "business", 
-        badge: "Business Owner", 
-        category: "Marketing Strategy", 
-        tag: "Tactics",
-        avatarColor: "bg-emerald-500", 
-        title: "Before/After Loyalty App Launch Performance Metrics", 
-        content: "Here is the blueprint for our digital stamp cards. We rotated discounts weekly, boosting return visits and score ratings.",
-        beforeMetrics: "15% Customer Return Rate, 4.1 Rating Score",
-        afterMetrics: "48% Customer Return Rate, 4.8 Rating Score (+120% conversion)",
-        isMarketingBlueprint: true, 
-        votes: 55, 
-        shares: 0,
-        createdAt: Date.now()
-      },
-      { 
-        author: "u/retail_revolution", 
-        role: "business", 
-        badge: "Business Owner", 
-        category: "B2B Packaging", 
-        tag: "Requirements",
-        avatarColor: "bg-emerald-600", 
-        title: "Requirement: 5000 Custom Printed Biodegradable Courier Bags", 
-        content: "We need courier mailers with gold-leaf custom branding. Material must be eco-friendly and fully water-resistant.",
-        isPackagingReq: true, 
-        materialType: "Biodegradable Plastic / Kraft Paper",
-        votes: 12, 
-        shares: 0, 
-        packagingQuotes: { 
-          q1: { id: "q1", supplierName: "Sarah Sterling (Wholesaler)", avatarColor: "bg-purple-500", price: "PKR 45000 total", timeline: "3 business days", accepted: false },
-          q2: { id: "q2", supplierName: "Gujranwala Package Co.", avatarColor: "bg-amber-500", price: "PKR 41000 total", timeline: "7 business days", accepted: false } 
-        },
-        createdAt: Date.now()
-      },
-      { 
-        author: "u/fashion_boutique_hyd", 
-        role: "business",
-        badge: "Business Owner", 
-        category: "Problems Hub", 
-        tag: "Logistics",
-        avatarColor: "bg-indigo-500", 
-        title: "Problem: Raw cotton delivery delays from central Punjab", 
-        content: "We are facing a 5-day lag in raw cotton arrivals halting our sewing assembly lines.",
-        isProblem: true, 
-        urgency: "High", 
-        nicheOwnersNotified: "Sarah Sterling,Zain Malik,Aman Ullah",
-        aiResolutionMock: "AI Suggestion: Consider establishing a buffer stock of 15% using Gujranwala localized warehousing grid.", 
-        votes: 8, 
-        shares: 0,
-        createdAt: Date.now()
-      },
-      { 
-        author: "u/coffee_bean_founder", 
-        role: "business",
-        badge: "Business Owner", 
-        category: "Success Story", 
-        tag: "Funding",
-        avatarColor: "bg-emerald-500", 
-        title: "How we increased our SmartBiz reputation score to 94 and secured 150k in VC funding in 30 days",
-        content: "We registered our coffee brand synced reviews and used the AI Consultant advice to run text loyalty promos. Yesterday we closed seed funding!", 
-        photoType: "coffee", 
-        votes: 142, 
-        shares: 0,
-        createdAt: Date.now()
-      }
-    ];
-
-    for (const post of defaultPosts) {
-      await set(push(postsRef), post);
-    }
-  }
+  // Intentionally empty — community feed starts blank; only real Founder/Business Owner posts appear.
+  return;
 };
 
-seedCommunityPosts();
+seedCommunityPosts().catch((err) => {
+  console.warn("Community seed skipped:", err?.message || err);
+});

@@ -54,6 +54,7 @@ export interface PitchTransactionNode {
   equityAcquired: number;
   roiExpected: number | string;
   receiptUrl: string;
+  paymentReceiptUrl?: string;
   status: TransactionStatus;
   timestamp: number;
   /** Destination / transfer account snapshot (legacy keys) */
@@ -258,6 +259,16 @@ async function receiptFileToDataUrl(file: File): Promise<string> {
   });
 }
 
+async function uploadPaymentReceiptCloudinary(file: File): Promise<string> {
+  const { uploadToCloudinary } = await import("@/lib/cloudinaryUpload");
+  try {
+    return await uploadToCloudinary(file, "payment_receipts");
+  } catch (err) {
+    console.warn("Cloudinary payment receipt failed, using data URL fallback:", err);
+    return receiptFileToDataUrl(file);
+  }
+}
+
 export type SubmitDeployedCapitalInput = {
   pitchId: string;
   founderId: string;
@@ -343,7 +354,7 @@ export async function submitDeployedCapitalPayment(
       console.error("submitDeployedCapitalPayment investor bank read:", invBankErr);
     }
 
-    const receiptUrl = await receiptFileToDataUrl(receiptFile);
+    const receiptUrl = await uploadPaymentReceiptCloudinary(receiptFile);
     const transactionId = `txn-${pitchId}-${investorId}-${Date.now()}`;
     const timestamp = Date.now();
 
@@ -358,6 +369,7 @@ export async function submitDeployedCapitalPayment(
       equityAcquired: Number(equityAcquired) || 0,
       roiExpected,
       receiptUrl,
+      paymentReceiptUrl: receiptUrl,
       status: "pending",
       timestamp,
       bankName: banking.bankName,

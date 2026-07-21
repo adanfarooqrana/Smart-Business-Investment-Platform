@@ -58,6 +58,7 @@ export function EntrepreneurWorkspaceHeader({ fullName, profileId, metrics }: Pr
 
         <Link
           to="/app/community"
+          search={{ entry: "workspace" }}
           className="flex shrink-0 items-center gap-2 rounded-full border border-[#FFA500]/40 bg-white px-3 py-2 text-xs font-bold text-[#FFA500] shadow-sm transition-all hover:bg-[#FFF8E1] hover:shadow-md md:px-4"
           title="Community Lounge — view strategies & sticky notes"
         >

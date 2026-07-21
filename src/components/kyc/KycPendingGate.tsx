@@ -4,9 +4,11 @@ import { Loader2, ShieldAlert, CheckCircle2, XCircle } from "lucide-react";
 import {
   streamUserKycStatus,
   applyLocalRoleApproval,
+  approveKycReview,
   type KycReviewRecord,
   type KycReviewRole,
 } from "@/services/adminKycService";
+import { KYC_BYPASS_FOR_TESTING } from "@/lib/kycBypass";
 
 type KycPendingGateProps = {
   uid: string;
@@ -20,7 +22,7 @@ type KycPendingGateProps = {
 
 /**
  * Blocks dashboard access until kyc_reviews/{uid}.kycStatus === 'approved'.
- * Live onValue → instant redirect when admin approves.
+ * When KYC_BYPASS_FOR_TESTING is true → auto-approve and open dashboard (code kept intact).
  */
 export function KycPendingGate({
   uid,
@@ -33,7 +35,32 @@ export function KycPendingGate({
   const [record, setRecord] = useState<KycReviewRecord | null>(null);
   const [ready, setReady] = useState(false);
 
+  // Testing bypass: auto-approve → dashboard
   useEffect(() => {
+    if (!KYC_BYPASS_FOR_TESTING || !uid) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        await approveKycReview(uid);
+        await applyLocalRoleApproval(uid, role);
+        onApproved?.();
+      } catch (error) {
+        console.warn("KYC bypass auto-approve:", error);
+        try {
+          await applyLocalRoleApproval(uid, role);
+        } catch {
+          /* continue locally */
+        }
+      }
+      if (!cancelled) navigate({ to: approvedPath });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [uid, role, approvedPath, navigate, onApproved]);
+
+  useEffect(() => {
+    if (KYC_BYPASS_FOR_TESTING) return;
     if (!uid) {
       setReady(true);
       return;
@@ -45,6 +72,7 @@ export function KycPendingGate({
   }, [uid]);
 
   useEffect(() => {
+    if (KYC_BYPASS_FOR_TESTING) return;
     if (!ready || !record || record.kycStatus !== "approved") return;
     let cancelled = false;
     void (async () => {
@@ -62,6 +90,20 @@ export function KycPendingGate({
       cancelled = true;
     };
   }, [ready, record?.kycStatus, uid, role, approvedPath, navigate, onApproved]);
+
+  if (KYC_BYPASS_FOR_TESTING) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+        <p className="text-sm font-semibold text-emerald-700">
+          KYC bypassed for testing — opening dashboard…
+        </p>
+        <p className="text-[11px] text-slate-400">
+          Re-enable later: set KYC_BYPASS_FOR_TESTING = false in src/lib/kycBypass.ts
+        </p>
+      </div>
+    );
+  }
 
   if (!ready) {
     return (

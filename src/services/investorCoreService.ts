@@ -160,6 +160,8 @@ export type PitchTransactionNode = {
   equityAcquired: number;
   roiExpected: number | string;
   receiptUrl: string;
+  /** Cloudinary secure URL for Stage-3 payment proof */
+  paymentReceiptUrl?: string;
   status: TransactionStatus;
   timestamp: number;
   /** Founder destination account (payment instructions snapshot) */
@@ -411,6 +413,16 @@ function receiptFileToDataUrl(file: File): Promise<string> {
   });
 }
 
+async function uploadPaymentReceipt(file: File): Promise<string> {
+  const { uploadToCloudinary } = await import("@/lib/cloudinaryUpload");
+  try {
+    return await uploadToCloudinary(file, "payment_receipts");
+  } catch (err) {
+    console.warn("Cloudinary receipt upload failed, falling back to data URL:", err);
+    return receiptFileToDataUrl(file);
+  }
+}
+
 export type SubmitPendingPaymentInput = {
   pitchId: string;
   founderId: string;
@@ -447,7 +459,8 @@ export async function submitPendingPaymentTransaction(
     }
     if (!input.receiptFile) throw new Error("Payment receipt proof is required.");
 
-    const receiptUrl = await receiptFileToDataUrl(input.receiptFile);
+    const receiptUrl = await uploadPaymentReceipt(input.receiptFile);
+    const paymentReceiptUrl = receiptUrl;
     const timestamp = Date.now();
     const transactionId = `txn-${pitchId}-${investorId}-${timestamp}`;
 
@@ -483,6 +496,7 @@ export async function submitPendingPaymentTransaction(
       equityAcquired: Number(input.equityAcquired) || 0,
       roiExpected: input.roiExpected,
       receiptUrl,
+      paymentReceiptUrl,
       status: "pending",
       timestamp,
       bankName,

@@ -5,12 +5,13 @@ export type AppRole =
   | "investor"
   | "consultant"
   | "business"
-  | "guest";
+  | "guest"
+  | "community_member";
 
 type StoredAppState = {
   role?: string;
   isLoggedIn?: boolean;
-  entrepreneur?: { isRegistered?: boolean };
+  entrepreneur?: { isRegistered?: boolean; uid?: string };
   investor?: { isRegistered?: boolean };
   consultant?: { isRegistered?: boolean };
   business?: { isRegistered?: boolean };
@@ -33,6 +34,46 @@ export function isLoggedIn(state: StoredAppState = readStoredAppState()): boolea
 
 export function currentRole(state: StoredAppState = readStoredAppState()): AppRole {
   return (state.role as AppRole) || "guest";
+}
+
+/** True when app state indicates a verified workspace account (not a guest joiner). */
+export function hasWorkspaceAppSession(state: StoredAppState = readStoredAppState()): boolean {
+  if (!state.isLoggedIn) return false;
+  const r = state.role;
+  return (
+    r === "business" ||
+    r === "entrepreneur" ||
+    r === "investor" ||
+    r === "consultant"
+  );
+}
+
+/**
+ * Community-member (landing Join Community) session only.
+ * Never returns true for an active workspace Dashboard session — leftover
+ * `smartbiz_community_session` must not downgrade Business Owners / Founders / Investors.
+ */
+export function isCommunityMemberSession(): boolean {
+  if (typeof window === "undefined") return false;
+  if (hasWorkspaceAppSession()) return false;
+  try {
+    const raw = localStorage.getItem("smartbiz_community_session");
+    if (raw) {
+      const s = JSON.parse(raw) as { role?: string };
+      if (s?.role === "community_member") return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  return currentRole() === "community_member";
+}
+
+/** Block community_member (landing joiners) from workspace dashboards. */
+export function blockCommunityMemberFromWorkspace(): void {
+  if (hasWorkspaceAppSession()) return;
+  if (isCommunityMemberSession()) {
+    throw redirect({ to: "/" });
+  }
 }
 
 export function isEntrepreneurSession(state: StoredAppState = readStoredAppState()): boolean {
@@ -67,24 +108,12 @@ export function isConsultantSession(state: StoredAppState = readStoredAppState()
   );
 }
 
-/**
- * Use inside a route's `beforeLoad` to require any logged-in session.
- * Redirects to `/app/login` when not authenticated.
- *
- *   beforeLoad: () => requireAuth(),
- */
 export function requireAuth(redirectTo = "/app/login"): void {
   if (!isLoggedIn()) {
     throw redirect({ to: redirectTo });
   }
 }
 
-/**
- * Use inside a route's `beforeLoad` to require one of the given roles.
- * Redirects to `/app/login` when the session role does not match.
- *
- *   beforeLoad: () => requireRole(["investor"]),
- */
 export function requireRole(roles: AppRole[], redirectTo = "/app/login"): void {
   const state = readStoredAppState();
   if (!isLoggedIn(state) || !roles.includes(currentRole(state))) {

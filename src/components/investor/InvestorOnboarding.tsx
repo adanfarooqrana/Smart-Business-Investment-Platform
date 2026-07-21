@@ -250,17 +250,17 @@ export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
       let cnicBackUrl = formData.cnicBack;
       let liveSelfieUrl = formData.liveSelfie;
       try {
-        const { uploadBase64Image } = await import("@/services/firebaseService");
+        const { ensureCloudinaryUrl } = await import("@/lib/cloudinaryUpload");
         const [f, b, s] = await Promise.all([
-          uploadBase64Image(uid, "cnic-front.jpg", formData.cnicFront).catch(() => ""),
-          uploadBase64Image(uid, "cnic-back.jpg", formData.cnicBack).catch(() => ""),
-          uploadBase64Image(uid, "live-selfie.jpg", formData.liveSelfie).catch(() => ""),
+          ensureCloudinaryUrl(formData.cnicFront, "cnic_verifications").catch(() => ""),
+          ensureCloudinaryUrl(formData.cnicBack, "cnic_verifications").catch(() => ""),
+          ensureCloudinaryUrl(formData.liveSelfie, "selfies").catch(() => ""),
         ]);
         if (f) cnicFrontUrl = f;
         if (b) cnicBackUrl = b;
         if (s) liveSelfieUrl = s;
       } catch (uploadErr) {
-        console.warn("Investor KYC image upload skipped:", uploadErr);
+        console.warn("Investor KYC Cloudinary upload skipped:", uploadErr);
       }
 
       await submitPendingKycReview({
@@ -279,6 +279,25 @@ export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
         matchConfidenceScore: formData.faceMatchScore,
       });
 
+      // Mirror to Firestore users/{uid}
+      try {
+        const { doc, setDoc, serverTimestamp } = await import("firebase/firestore");
+        const { firestore } = await import("@/firebase");
+        await setDoc(
+          doc(firestore, "users", uid),
+          {
+            role: "investor",
+            cnicFrontUrl,
+            cnicBackUrl,
+            liveSelfieUrl,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      } catch {
+        /* non-fatal */
+      }
+
       registerInvestor({
         name: formData.fullName.trim(),
         email: formData.email.trim(),
@@ -290,9 +309,9 @@ export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
         location: "Pakistan",
         strategy: `Bank: ${formData.bankName}`,
         entityType: "Normal Person",
-        cnicFront: formData.cnicFront,
-        cnicBack: formData.cnicBack,
-        liveSelfie: formData.liveSelfie,
+        cnicFront: cnicFrontUrl,
+        cnicBack: cnicBackUrl,
+        liveSelfie: liveSelfieUrl,
       });
 
       setIsLoggedIn(true);
@@ -375,7 +394,7 @@ export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
                   </Label>
                   <Input
                     id="inv-name"
-                    placeholder="e.g. Ali Hassan"
+                    placeholder="Enter your full name"
                     value={formData.fullName}
                     onChange={(e) => setField("fullName", e.target.value)}
                     required
@@ -390,7 +409,7 @@ export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
                   <Input
                     id="inv-email"
                     type="email"
-                    placeholder="e.g. contact@apexventures.com"
+                    placeholder="Enter your email address"
                     value={formData.email}
                     onChange={(e) => setField("email", e.target.value)}
                     required
@@ -406,7 +425,7 @@ export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
                     <Input
                       id="inv-password"
                       type={showPassword ? "text" : "password"}
-                      placeholder="Min 8 chars · letters + numbers"
+                      placeholder="Create your secure password"
                       value={formData.password}
                       onChange={(e) => handlePasswordChange(e.target.value)}
                       className="pr-10"

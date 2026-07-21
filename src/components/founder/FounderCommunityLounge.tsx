@@ -2,35 +2,53 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Heart,
   MessageSquare,
-  Search,
   Bot,
   Trash2,
   Lock,
   Globe,
-  Package,
-  Lightbulb,
-  ShoppingCart,
   Send,
   Upload,
   ImageIcon,
-  Sparkles,
+  LogOut,
+  User,
 } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
-import { useAppState, type CommunityPost } from "@/hooks/useAppState";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  subscribeToStickyNotes,
-  likeStickyNote,
-  type StickyNote,
-} from "@/services/founderCommunityService";
 import { FounderVideoFeed } from "@/components/founder/FounderVideoFeed";
 import { CommunityErrorBoundary } from "@/components/founder/CommunityErrorBoundary";
+import { CommunityGuestAuthPanel, clearCommunitySession } from "@/components/community/CommunityGuestAuthPanel";
+import { StickyNotePostCard } from "@/components/community/StickyNotePostCard";
 import { toast, Toaster } from "sonner";
-import { getPackagingQuotePrice, getPrimaryPackagingQuote } from "@/lib/communityPostUtils";
+import { formatPostAuthorLabel } from "@/lib/communityPostUtils";
+import {
+  subscribeToFirestorePosts,
+  createFirestorePost,
+  toggleFirestorePostLike,
+  addFirestoreComment,
+  shareFirestorePost,
+  subscribeToFirestoreComments,
+  deleteFirestorePost,
+  mapAuthorRoleFromCommunity,
+  mapBadgeFromAuthorRole,
+  resolveAuthorDisplayName,
+  DEFAULT_AUTHOR_AVATAR,
+  normalizeLikes,
+  type FirestoreCommunityPost,
+  type FirestoreComment,
+} from "@/services/communityFirestoreService";
 
-export type CommunityUserRole = "entrepreneur" | "investor" | "wholesaler" | "business";
+export type CommunityUserRole =
+  | "entrepreneur"
+  | "investor"
+  | "wholesaler"
+  | "business"
+  | "guest"
+  | "community_member";
+
+export { formatPostAuthorLabel };
+
 type Tab = "posts" | "strategies" | "packaging" | "videos";
 
 type Props = {
@@ -42,57 +60,92 @@ type Props = {
   embedded?: boolean;
   userRole?: CommunityUserRole;
   displayName?: string;
+  businessName?: string;
+  ownerName?: string;
+  /** Optional avatar / business logo URL saved on create */
+  authorPhoto?: string;
+  backLabel?: string;
+  /** public = Landing; workspace = Dashboard Community */
+  entry?: "public" | "workspace";
 };
 
-const STICKY_COLORS = ["#FFD966", "#FFB3C6", "#B5EAD7", "#AED6F1", "#F0E6FF"];
-
-function mapCommunityRole(userRole: CommunityUserRole): CommunityPost["role"] {
-  if (userRole === "wholesaler") return "consultant";
-  if (userRole === "business") return "business";
-  if (userRole === "investor") return "investor";
-  return "business";
-}
-
-function mapBadge(userRole: CommunityUserRole): CommunityPost["badge"] {
-  if (userRole === "wholesaler") return "Verified Consultant";
-  if (userRole === "business") return "Business Owner";
-  if (userRole === "investor") return "Investor";
-  return "Business Owner";
-}
-
 export function FounderCommunityLounge({
-  founderId,
-  founderUsername,
+  founderId = "local-guest",
+  founderUsername = "u/member",
   isOpen,
   onClose,
-  onViewProfile,
   embedded = false,
   userRole = "entrepreneur",
   displayName,
+  businessName,
+  ownerName,
+  authorPhoto,
+  backLabel,
+  entry = "public",
 }: Props) {
-  const navigate = useNavigate();
-  const memberName = displayName || founderUsername.replace("u/", "").replace(/_/g, " ");
-  const canPost = userRole !== "entrepreneur";
+  const { currentUser, userData, refreshUserData, logout, loading: authLoading } = useAuth();
+  const safeUsername = String(founderUsername || "u/member");
+  const memberName =
+    String(ownerName || displayName || "").trim() ||
+    safeUsername.replace(/^u\//, "").replace(/_/g, " ") ||
+    (userRole === "business" ? "Business Owner" : "Founder");
+  const memberEmail = String(currentUser?.email || userData?.email || "");
+  const memberPhoto =
+    String(authorPhoto || currentUser?.photoURL || "").trim() ||
+    String((userData as { avatarUrl?: string; photoURL?: string } | null)?.avatarUrl || "").trim() ||
+    String((userData as { photoURL?: string } | null)?.photoURL || "").trim() ||
+    DEFAULT_AUTHOR_AVATAR;
 
-  const {
-    isLoggedIn,
-    communityPosts: rawCommunityPosts,
-    toggleLikePost,
-    addCommunityComment,
-    addCommunityPost,
-    likedPosts: rawLikedPosts,
-    deleteCommunityPost,
-    mergeCommunityPostsFromBackend,
-  } = useAppState();
+  const authRole = String(userData?.role || "").trim().toLowerCase();
+  const isFounderAccount =
+    userRole === "entrepreneur" ||
+    authRole === "founder" ||
+    authRole === "entrepreneur";
+  const isBusinessAccount =
+    userRole === "business" || authRole === "business_owner" || authRole === "business";
+  const isInvestorAccount =
+    userRole === "investor" || authRole === "investor";
 
-  const communityPosts = Array.isArray(rawCommunityPosts) ? rawCommunityPosts : [];
-  const likedPosts = Array.isArray(rawLikedPosts) ? rawLikedPosts : [];
+  const roleIsWorkspace = isFounderAccount || isBusinessAccount || isInvestorAccount;
 
+  /**
+   * Posting + Dashboard chrome when entered from Workspace (Founder Suite / BO Dashboard).
+   * Landing (`entry=public`) never unlocks workspace posting.
+   */
+  const isWorkspacePoster = entry === "workspace" && roleIsWorkspace;
+
+  const canPost = !!currentUser && isWorkspacePoster;
+
+  /** BO/Founder from Dashboard: logout only via Sidebar. Members/guests: show Log out. */
+  const showBannerLogout = !!currentUser && !isWorkspacePoster;
+
+  const canEngage = !!currentUser;
+
+  /** Hide Join Community for Founder Suite / workspace sessions (never treat as guest). */
+  const showGuestJoin =
+    !authLoading && !currentUser && entry !== "workspace";
+
+  const resolvedBackLabel =
+    backLabel ||
+    (isWorkspacePoster ? "← Back to Dashboard" : "← Back to Home");
+
+  const bannerSubtext = canPost
+    ? isFounderAccount
+      ? "Verified Founder (Full Posting Authority)"
+      : isBusinessAccount
+        ? "Verified Business Owner — You have full posting authority."
+        : "Verified Investor — You have full posting authority."
+    : "Community Member — You can like & comment. Posting is restricted to verified Founders & Investors.";
+
+  const [livePosts, setLivePosts] = useState<FirestoreCommunityPost[]>([]);
+  const [feedLoading, setFeedLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("posts");
-  const [stickyNotes, setStickyNotes] = useState<StickyNote[]>([]);
   const [searchQ, setSearchQ] = useState("");
   const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
-  const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null);
+  const [selectedPost, setSelectedPost] = useState<FirestoreCommunityPost | null>(null);
+  const [liveComments, setLiveComments] = useState<FirestoreComment[]>([]);
+  const [authTick, setAuthTick] = useState(0);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   const [postTitle, setPostTitle] = useState("");
   const [postContent, setPostContent] = useState("");
@@ -102,90 +155,155 @@ export function FounderCommunityLounge({
   const [submittingPost, setSubmittingPost] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
+  // Real-time Firestore posts feed (no dummy data)
   useEffect(() => {
     if (!isOpen) return;
-    let unsubNotes: (() => void) | undefined;
-    let unsubPosts: (() => void) | undefined;
-
+    setFeedLoading(true);
+    let unsub: (() => void) | undefined;
     try {
-      unsubNotes = subscribeToStickyNotes(setStickyNotes);
-    } catch {
-      setStickyNotes([]);
+      unsub = subscribeToFirestorePosts((posts) => {
+        setLivePosts(Array.isArray(posts) ? posts.filter(Boolean) : []);
+        setFeedLoading(false);
+      });
+    } catch (err) {
+      console.warn("Community feed subscribe failed:", err);
+      setLivePosts([]);
+      setFeedLoading(false);
     }
-
-    void import("@/services/firebaseService")
-      .then(({ subscribeToCommunityPosts }) => {
-        unsubPosts = subscribeToCommunityPosts((posts) => {
-          window.setTimeout(() => {
-            try {
-              mergeCommunityPostsFromBackend(posts);
-            } catch {
-              /* keep local posts */
-            }
-          }, 0);
-        });
-      })
-      .catch(() => {});
-
     return () => {
-      unsubNotes?.();
-      unsubPosts?.();
+      try {
+        unsub?.();
+      } catch {
+        /* ignore */
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
+  // Live comments for selected post
+  useEffect(() => {
+    if (!selectedPost?.id) {
+      setLiveComments([]);
+      return;
+    }
+    const unsub = subscribeToFirestoreComments(selectedPost.id, setLiveComments);
+    return () => unsub();
+  }, [selectedPost?.id]);
+
+  // Keep selected post in sync with live feed
+  useEffect(() => {
+    if (!selectedPost) return;
+    const fresh = livePosts.find((p) => p.id === selectedPost.id);
+    if (fresh) setSelectedPost(fresh);
+  }, [livePosts, selectedPost?.id]);
+
+  const generalPosts = useMemo(
+    () => livePosts.filter((p) => p.category === "General" || (!p.isMarketingBlueprint && !p.isPackagingReq)),
+    [livePosts],
+  );
+
   const strategies = useMemo(
-    () => communityPosts.filter((p) => p.isMarketingBlueprint || p.category === "Marketing Strategy"),
-    [communityPosts],
+    () => livePosts.filter((p) => p.isMarketingBlueprint || p.category === "Marketing Strategy"),
+    [livePosts],
   );
 
   const packaging = useMemo(
-    () => communityPosts.filter((p) => p.isPackagingReq),
-    [communityPosts],
+    () => livePosts.filter((p) => p.isPackagingReq || p.category === "Packaging"),
+    [livePosts],
   );
 
-  const requireAuth = (action: () => void) => {
-    if (!isLoggedIn) {
-      toast.error("Please sign in to interact with community posts.");
-      navigate({ to: "/app/login" });
+  const requireEngage = (action: () => void) => {
+    if (!currentUser) {
+      setAuthModalOpen(true);
+      toast.message("Join Community to like and comment.");
       return;
     }
     action();
   };
 
-  const handleLikeSticky = async (note: StickyNote) => {
-    requireAuth(async () => {
-      await likeStickyNote(note.id, founderId);
+  const handleCommunityLogout = async () => {
+    try {
+      clearCommunitySession();
+      await logout();
+      setAuthModalOpen(false);
+      setAuthTick((n) => n + 1);
+      toast.success("Logged out. Join again anytime.");
+      // Stay on public community — restore guest auth box (do NOT go to Dashboard)
+    } catch {
+      toast.error("Logout failed.");
+    }
+  };
+
+  const handleLikePost = (post: FirestoreCommunityPost) => {
+    requireEngage(async () => {
+      if (!currentUser?.uid || !post?.id) return;
+      const likes = normalizeLikes(post.likes);
+      const liked = likes.includes(currentUser.uid);
+      try {
+        await toggleFirestorePostLike(post.id, currentUser.uid, liked);
+      } catch (err) {
+        console.warn(err);
+        toast.error("Could not update like.");
+      }
     });
   };
 
-  const handleLikePost = (postId: string) => {
-    requireAuth(() => toggleLikePost(postId));
+  const handleSharePost = (post: FirestoreCommunityPost) => {
+    requireEngage(async () => {
+      if (!post?.id) return;
+      try {
+        await shareFirestorePost(post.id);
+        const url = `${window.location.origin}/app/community?entry=public`;
+        if (navigator.share) {
+          await navigator.share({ title: post.title, text: post.content, url }).catch(() => {});
+        } else if (navigator.clipboard) {
+          await navigator.clipboard.writeText(url);
+          toast.success("Link copied — share count updated.");
+          return;
+        }
+        toast.success("Shared!");
+      } catch (err) {
+        console.warn(err);
+        toast.error("Could not share post.");
+      }
+    });
   };
 
   const handleComment = (postId: string) => {
     const text = commentDraft[postId]?.trim();
     if (!text) return;
-    requireAuth(() => {
-      addCommunityComment(postId, {
-        author: founderUsername,
-        avatarColor: "bg-[#FFA500]",
-        content: text,
-      });
-      setCommentDraft((d) => ({ ...d, [postId]: "" }));
-      toast.success("Comment posted!");
+    requireEngage(async () => {
+      if (!currentUser) return;
+      try {
+        await addFirestoreComment({
+          postId,
+          userId: currentUser.uid,
+          userName: memberName,
+          userEmail: memberEmail,
+          commentText: text,
+        });
+        setCommentDraft((d) => ({ ...d, [postId]: "" }));
+        toast.success("Comment posted!");
+      } catch (err) {
+        console.warn(err);
+        toast.error("Could not post comment.");
+      }
     });
   };
 
-  const handleDelete = (postId: string, author: string) => {
-    if (!author.includes(founderUsername.replace("u/", ""))) {
+  const handleDelete = async (post: FirestoreCommunityPost) => {
+    if (!currentUser || post.authorUid !== currentUser.uid) {
       toast.error("You can only delete your own posts.");
       return;
     }
     if (!window.confirm("Delete this post permanently?")) return;
-    deleteCommunityPost(postId);
-    toast.success("Post deleted.");
-    setSelectedPost(null);
+    try {
+      await deleteFirestorePost(post.id, post.authorUid, currentUser.uid);
+      setSelectedPost(null);
+      toast.success("Post deleted.");
+    } catch (err) {
+      console.warn(err);
+      toast.error("Could not delete post.");
+    }
   };
 
   const handleImagePick = (file: File | undefined) => {
@@ -195,90 +313,85 @@ export function FounderCommunityLounge({
     reader.readAsDataURL(file);
   };
 
-  const uploadPostImage = async (): Promise<string> => {
-    if (!postImage.startsWith("data:")) return postImage;
-    if (founderId.startsWith("local-")) return postImage;
+  const uploadPostImage = async (): Promise<string | undefined> => {
+    if (!postImage) return undefined;
+    if (!postImage.startsWith("data:") && /^https?:\/\//i.test(postImage)) return postImage;
     try {
-      const { uploadBase64Image } = await import("@/services/firebaseService");
-      return await uploadBase64Image(founderId, `community-${Date.now()}.jpg`, postImage);
-    } catch {
-      return postImage;
+      const { uploadToCloudinary } = await import("@/lib/cloudinaryUpload");
+      toast.message("Uploading image...");
+      const url = await uploadToCloudinary(postImage, "community_images");
+      toast.success("Upload complete");
+      return url;
+    } catch (err) {
+      console.warn("Cloudinary community image failed, trying Firebase Storage:", err);
+      if (String(founderId || "").startsWith("local-") || !currentUser) return postImage;
+      try {
+        const { uploadBase64Image } = await import("@/services/firebaseService");
+        return await uploadBase64Image(currentUser.uid, `community-${Date.now()}.jpg`, postImage);
+      } catch {
+        return postImage;
+      }
     }
   };
 
   const submitNewPost = async () => {
-    if (!postTitle.trim() || !postContent.trim()) {
-      toast.error("Title aur description likhein.");
+    if (!canPost || !currentUser) {
+      toast.error("Only Business Owners, Founders, and Investors can post.");
       return;
     }
-    requireAuth(async () => {
-      setSubmittingPost(true);
-      try {
-        const imageUrl = postImage ? await uploadPostImage() : undefined;
-        const base = {
-          author: founderUsername,
-          role: mapCommunityRole(userRole),
-          badge: mapBadge(userRole),
-          avatarColor: userRole === "wholesaler" ? "bg-cyan-500" : userRole === "investor" ? "bg-violet-500" : "bg-emerald-500",
-          title: postTitle.trim(),
-          content: postContent.trim(),
-          proofAttachment: imageUrl,
-        };
+    if (!postTitle.trim() || !postContent.trim()) {
+      toast.error("Please fill in title and description.");
+      return;
+    }
+    setSubmittingPost(true);
+    try {
+      const imageUrl = await uploadPostImage();
+      // Prefer explicit founder metadata when Founder Suite / auth role is founder
+      const authorRole = isFounderAccount
+        ? "founder"
+        : mapAuthorRoleFromCommunity(userRole, authRole);
+      const badge = mapBadgeFromAuthorRole(authorRole);
+      const resolvedName = resolveAuthorDisplayName({
+        displayName:
+          memberName ||
+          currentUser.displayName ||
+          (isFounderAccount ? "Founder" : undefined),
+        businessName,
+        email: memberEmail || currentUser.email,
+        role: authorRole,
+      });
 
-        if (postKind === "strategy") {
-          addCommunityPost({
-            ...base,
-            category: "Marketing Strategy",
-            isMarketingBlueprint: true,
-            beforeMetrics: "Baseline metrics before strategy",
-            afterMetrics: "Projected uplift after 90 days",
-          });
-        } else if (postKind === "packaging") {
-          addCommunityPost({
-            ...base,
-            category: "Packaging",
-            isPackagingReq: true,
-            materialType: postTitle.trim(),
-            packagingQuotes: {
-              default: {
-                id: "default",
-                supplierName: memberName,
-                avatarColor: "bg-[#FFA500]",
-                price: packagingPrice || "Contact for quote",
-                timeline: "7–14 days",
-              },
-            },
-          });
-        } else {
-          addCommunityPost({
-            ...base,
-            category: "General",
-          });
-        }
+      await createFirestorePost({
+        title: postTitle.trim(),
+        content: postContent.trim(),
+        category:
+          postKind === "strategy" ? "Marketing Strategy" : postKind === "packaging" ? "Packaging" : "General",
+        authorUid: currentUser.uid,
+        authorName: resolvedName || currentUser.displayName || "Founder",
+        authorPhoto: memberPhoto || currentUser.photoURL || DEFAULT_AUTHOR_AVATAR,
+        authorEmail: memberEmail || currentUser.email || undefined,
+        businessName: authorRole === "business_owner" ? businessName || undefined : undefined,
+        authorRole,
+        badge,
+        proofAttachment: imageUrl,
+        isMarketingBlueprint: postKind === "strategy",
+        isPackagingReq: postKind === "packaging",
+        materialType: postKind === "packaging" ? postTitle.trim() : undefined,
+        packagingPrice: postKind === "packaging" ? packagingPrice || undefined : undefined,
+      });
 
-        setPostTitle("");
-        setPostContent("");
-        setPostImage("");
-        setPackagingPrice("");
-        toast.success("Post live — backend synced!");
-      } finally {
-        setSubmittingPost(false);
-      }
-    });
-  };
-
-  const handleAddToCart = (post: CommunityPost) => {
-    requireAuth(() => {
-      const price = getPackagingQuotePrice(post.packagingQuotes);
-      toast.success(`Added to cart: ${post.title} — ${price}`);
-    });
-  };
-
-  const handleSendMessage = (post: CommunityPost) => {
-    requireAuth(() => {
-      toast.success(`Message sent to ${post.author} about "${post.title}"`);
-      navigate({ to: "/app/login" });
-    });
+      setPostTitle("");
+      setPostContent("");
+      setPostImage("");
+      setPackagingPrice("");
+      setPostKind("post");
+      toast.success("Sticky note published — live on Firestore.");
+    } catch (err) {
+      console.warn(err);
+      toast.error("Failed to publish post.");
+    } finally {
+      setSubmittingPost(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -288,16 +401,50 @@ export function FounderCommunityLounge({
     : "fixed inset-0 z-50 flex flex-col";
 
   const tabs: Tab[] = ["posts", "strategies", "packaging", "videos"];
+  const uid = currentUser?.uid;
+
+  const renderFeed = (posts: FirestoreCommunityPost[], emptyMsg: string) => (
+    <div
+      className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+      style={{
+        backgroundImage: "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.06) 1px, transparent 0)",
+        backgroundSize: "18px 18px",
+      }}
+    >
+      {feedLoading && (
+        <p className="col-span-3 text-center text-slate-500">Loading live posts…</p>
+      )}
+      {!feedLoading &&
+        posts.map((post, i) => (
+          <StickyNotePostCard
+            key={post.id}
+            post={post}
+            index={i}
+            liked={!!uid && normalizeLikes(post.likes).includes(uid)}
+            onOpen={() => setSelectedPost(post)}
+            onLike={() => handleLikePost(post)}
+            onShare={() => handleSharePost(post)}
+          />
+        ))}
+      {!feedLoading && posts.length === 0 && (
+        <p className="col-span-3 rounded-2xl border border-dashed border-[#FFD700]/25 bg-white/5 px-6 py-10 text-center text-sm text-slate-400">
+          {emptyMsg}
+        </p>
+      )}
+    </div>
+  );
 
   return (
-    <div className={shellClass} style={{ background: "#1a1a2e" }}>
+    <div className={shellClass} style={{ background: "#1a1a2e" }} key={authTick}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Kalam:wght@400;700&display=swap');`}</style>
       <Toaster position="bottom-right" theme="dark" closeButton />
+
       <div className="flex items-center justify-between border-b border-[#FFD700]/20 px-6 py-4">
         <div className="flex items-center gap-3">
           <Globe className="h-6 w-6 text-[#FFD700]" />
           <div>
             <h2 className="font-display text-xl font-bold text-white">Community Lounge</h2>
-            <p className="text-xs text-slate-400">Unified feed — investors, wholesalers &amp; business owners</p>
+            <p className="text-xs text-slate-400">Live Firestore feed · sticky notes from verified accounts</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -317,8 +464,17 @@ export function FounderCommunityLounge({
               </button>
             ))}
           </div>
+          {showGuestJoin && (
+            <Button
+              size="sm"
+              className="rounded-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-xs font-bold text-[#1a1a2e]"
+              onClick={() => setAuthModalOpen(true)}
+            >
+              Join Community
+            </Button>
+          )}
           <Button variant="ghost" onClick={onClose} className="text-slate-400 hover:text-white">
-            {embedded ? "← Back to Dashboard" : "✕ Close"}
+            {resolvedBackLabel}
           </Button>
         </div>
       </div>
@@ -340,6 +496,64 @@ export function FounderCommunityLounge({
             ))}
           </div>
 
+          {/* Guest Join — ONLY for Landing/public entry (never Founder Suite workspace) */}
+          {showGuestJoin && (
+            <CommunityGuestAuthPanel
+              open={authModalOpen || tab !== "videos"}
+              variant={authModalOpen ? "modal" : "panel"}
+              onClose={() => setAuthModalOpen(false)}
+            onAuthenticated={async () => {
+              setAuthModalOpen(false);
+              window.setTimeout(async () => {
+                const uid = (await import("@/firebase")).auth.currentUser?.uid;
+                if (uid) await refreshUserData(uid);
+                setAuthTick((n) => n + 1);
+              }, 100);
+            }}
+            />
+          )}
+
+          {entry === "workspace" && !currentUser && !authLoading && (
+            <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-100">
+              Founder session expired. Please sign in again from the Founder Suite to publish.
+            </div>
+          )}
+
+          {/* Logged-in banner — members show Log out; workspace posters do not */}
+          {currentUser && (
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#FFD700]/30 bg-gradient-to-r from-[#FFD700]/10 to-[#FFA500]/5 px-4 py-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FFD700]/20 text-[#FFD700]">
+                  <User className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-white">
+                    Logged in as {memberName}
+                    {memberEmail ? (
+                      <span className="font-normal text-slate-400"> ({memberEmail})</span>
+                    ) : null}
+                    {canPost && isFounderAccount ? (
+                      <span className="font-normal text-[#FFD700]"> — {bannerSubtext}</span>
+                    ) : null}
+                  </p>
+                  {!(canPost && isFounderAccount) ? (
+                    <p className="text-[11px] text-slate-400">{bannerSubtext}</p>
+                  ) : null}
+                </div>
+              </div>
+              {showBannerLogout ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 border-slate-500 text-slate-200 hover:bg-white/10"
+                  onClick={handleCommunityLogout}
+                >
+                  <LogOut className="mr-1.5 h-3.5 w-3.5" /> Log out
+                </Button>
+              ) : null}
+            </div>
+          )}
+
           {canPost && tab !== "videos" && (
             <PostComposer
               postKind={postKind}
@@ -359,66 +573,18 @@ export function FounderCommunityLounge({
             />
           )}
 
-          {tab === "posts" && (
-            <div>
-              {userRole === "entrepreneur" && (
-                <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
-                  <Lock className="h-4 w-4 shrink-0" />
-                  Founders post from Profile page. Browse community updates here.
-                </div>
-              )}
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {stickyNotes.map((note, i) => (
-                  <div
-                    key={note.id}
-                    className="founder-sticky-note group relative cursor-pointer rounded-2xl p-5 shadow-lg transition hover:scale-[1.02]"
-                    style={{
-                      background: note.color || STICKY_COLORS[i % STICKY_COLORS.length],
-                      fontFamily: "'Caveat', cursive",
-                      minHeight: 160,
-                    }}
-                    onClick={() => note.author && onViewProfile(note.author)}
-                  >
-                    <p className="mb-3 text-lg font-semibold leading-snug text-slate-800">{note.content}</p>
-                    <div className="flex items-center justify-between text-xs text-slate-600">
-                      <span className="font-bold">{note.author}</span>
-                      <span className="rounded-full bg-white/50 px-2 py-0.5">{note.category}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleLikeSticky(note);
-                      }}
-                      className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-white/70 px-2 py-1 text-xs font-bold text-red-500"
-                    >
-                      <Heart className="h-3 w-3" /> {note.likes || 0}
-                    </button>
-                  </div>
-                ))}
-                {(communityPosts ?? [])
-                  .filter((p) => !p.isMarketingBlueprint && !p.isPackagingReq)
-                  .slice(0, 12)
-                  .map((post) => (
-                    <div
-                      key={post.id}
-                      className="rounded-2xl border border-[#FFD700]/20 bg-white/5 p-4"
-                      onClick={() => setSelectedPost(post)}
-                    >
-                      <p className="text-xs font-bold text-[#FFD700]">{post.author}</p>
-                      <h3 className="mt-1 font-bold text-white">{post.title}</h3>
-                      <p className="mt-1 line-clamp-3 text-sm text-slate-400">{post.content}</p>
-                      {post.proofAttachment && (
-                        <img src={post.proofAttachment} alt="" className="mt-2 h-24 w-full rounded-lg object-cover" />
-                      )}
-                    </div>
-                  ))}
-                {stickyNotes.length === 0 && (communityPosts ?? []).length === 0 && (
-                  <p className="col-span-3 text-center text-slate-500">No posts yet — be the first!</p>
-                )}
-              </div>
+          {currentUser && !canPost && tab !== "videos" && (
+            <div className="mb-4 flex items-center gap-2 rounded-xl border border-slate-500/30 bg-white/5 px-4 py-3 text-xs text-slate-300">
+              <Lock className="h-4 w-4 shrink-0 text-slate-400" />
+              Create Post is hidden for community members. Like and comment on sticky notes below.
             </div>
           )}
+
+          {tab === "posts" &&
+            renderFeed(
+              generalPosts,
+              "No business posts yet. Posts from verified founders will appear here.",
+            )}
 
           {tab === "strategies" && (
             <div className="space-y-4">
@@ -433,114 +599,152 @@ export function FounderCommunityLounge({
                   <Bot className="mr-1 h-4 w-4" /> Ask AI
                 </Button>
               </div>
-              {strategies
-                .filter(
+              {renderFeed(
+                strategies.filter(
                   (p) =>
                     !searchQ ||
-                    String(p.title ?? "")
-                      .toLowerCase()
-                      .includes(searchQ.toLowerCase()),
-                )
-                .map((post) => (
-                  <StrategyCard
-                    key={post.id}
-                    post={post}
-                    isLiked={(likedPosts ?? []).includes(post.id)}
-                    onLike={() => handleLikePost(post.id)}
-                    onComment={(text) => {
-                      setCommentDraft((d) => ({ ...d, [post.id]: text }));
-                      handleComment(post.id);
-                    }}
-                    onViewProfile={() => onViewProfile(post.author)}
-                  />
-                ))}
-              {strategies.length === 0 && (
-                <p className="text-center text-slate-500">No strategies posted yet.</p>
+                    p.title.toLowerCase().includes(searchQ.toLowerCase()),
+                ),
+                "No strategies yet. Verified accounts can publish via Create Post → Strategy.",
               )}
             </div>
           )}
 
-          {tab === "packaging" && (
-            <div className="space-y-4">
-              {packaging.map((post) => {
-                const quote = getPrimaryPackagingQuote(post.packagingQuotes);
-                const price = quote?.price || "Contact for quote";
-                return (
-                  <div key={post.id} className="rounded-2xl border border-[#FFD700]/20 bg-white/5 p-5">
-                    <div className="mb-2 flex items-center gap-2">
-                      <Package className="h-4 w-4 text-[#FFA500]" />
-                      <span className="text-xs font-bold text-[#FFD700]">{post.materialType || "Packaging"}</span>
-                      <span className="ml-auto rounded-full bg-[#FFD700]/20 px-2 py-0.5 text-xs font-bold text-[#FFD700]">
-                        {price}
-                      </span>
-                    </div>
-                    <h3 className="font-bold text-white">{post.title}</h3>
-                    <p className="mt-1 text-sm text-slate-400">{post.content}</p>
-                    {post.proofAttachment && (
-                      <img src={post.proofAttachment} alt="" className="mt-3 h-32 w-full rounded-xl object-cover" />
-                    )}
-                    <div className="mt-3 rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-xs text-cyan-100">
-                      <Sparkles className="mr-1 inline h-3.5 w-3.5" />
-                      Consultant tip: {post.materialType || "Eco"} packaging boosts shelf appeal and reduces damage in transit.
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleLikePost(post.id)}
-                        className="flex items-center gap-1 text-xs text-[#FFD700]"
-                      >
-                        <Heart className="h-3.5 w-3.5" /> {post.votes}
-                      </button>
-                      <Button size="sm" variant="outline" className="border-[#FFD700]/30 text-xs text-[#FFD700]" onClick={() => handleSendMessage(post)}>
-                        <Send className="mr-1 h-3 w-3" /> Message
-                      </Button>
-                      <Button size="sm" className="bg-[#FFA500] text-xs text-white" onClick={() => handleAddToCart(post)}>
-                        <ShoppingCart className="mr-1 h-3 w-3" /> Add to Cart — {price}
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-              {packaging.length === 0 && (
-                <p className="text-center text-slate-500">Wholesalers: post packaging ideas from the composer above.</p>
-              )}
-            </div>
-          )}
+          {tab === "packaging" &&
+            renderFeed(packaging, "No packaging posts yet. Use Create Post → Packaging.")}
 
           {tab === "videos" && (
             <CommunityErrorBoundary onReset={() => setTab("posts")}>
               <FounderVideoFeed
                 userId={founderId}
                 userName={memberName}
-                userRole={userRole === "wholesaler" ? "consultant" : userRole}
+                userRole={
+                  userRole === "wholesaler"
+                    ? "consultant"
+                    : userRole === "community_member"
+                      ? "guest"
+                      : userRole
+                }
               />
             </CommunityErrorBoundary>
           )}
         </div>
 
         <aside className="hidden w-64 shrink-0 overflow-y-auto border-l border-[#FFD700]/10 p-4 xl:block">
-          <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[#FFD700]/70">Sponsored</p>
-          <AdSidebarCard title="Premium Rice Wholesale" subtitle="Gujranwala · Bulk orders from Rs. 45/kg" glow />
-          <AdSidebarCard title="Eco Packaging Solutions" subtitle="Biodegradable boxes · MOQ 500 units" />
-          <AdSidebarCard title="Mobile Accessories Hub" subtitle="National shipping · Verified wholesaler" glow />
+          <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[#FFD700]/70">Tips</p>
+          <AdSidebarCard title="Live Firestore" subtitle="Posts sync in real time — no dummy data" glow />
+          <AdSidebarCard title="Likes & comments" subtitle="Saved to Firestore for every signed-in user" />
+          <AdSidebarCard title="Sticky notes" subtitle="Only BO / Founder / Investor posts" glow />
         </aside>
       </div>
 
       {selectedPost && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 p-4">
           <div className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-[#FFD700]/30 bg-[#1a1a2e] p-6">
-            <h3 className="font-bold text-white">{selectedPost.title}</h3>
+            <span className="rounded-full bg-[#FFD700]/20 px-2 py-0.5 text-[10px] font-bold uppercase text-[#FFD700]">
+              {selectedPost.badge}
+            </span>
+            <div className="mt-3 flex items-center gap-3">
+              <img
+                src={selectedPost.authorPhoto || DEFAULT_AUTHOR_AVATAR}
+                alt=""
+                className="h-10 w-10 rounded-full object-cover ring-2 ring-[#FFD700]/40"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = DEFAULT_AUTHOR_AVATAR;
+                }}
+              />
+              <p className="text-xs font-bold text-[#FFD700]">
+                {selectedPost.businessName
+                  ? `${selectedPost.businessName} · ${selectedPost.authorName}`
+                  : selectedPost.authorName || "Business Owner"}
+              </p>
+            </div>
+            <h3 className="mt-2 font-bold text-white">{selectedPost.title}</h3>
             <p className="mt-2 text-sm text-slate-400">{selectedPost.content}</p>
+            {selectedPost.proofAttachment && (
+              <img
+                src={selectedPost.proofAttachment}
+                alt=""
+                className="mt-3 max-h-56 w-full rounded-xl object-cover"
+              />
+            )}
+
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                type="button"
+                className={`flex items-center gap-1 text-xs font-bold ${
+                  uid && normalizeLikes(selectedPost.likes).includes(uid) ? "text-rose-400" : "text-[#FFD700]"
+                }`}
+                onClick={() => handleLikePost(selectedPost)}
+              >
+                <Heart
+                  className={`h-3.5 w-3.5 ${uid && normalizeLikes(selectedPost.likes).includes(uid) ? "fill-rose-400" : ""}`}
+                />{" "}
+                {normalizeLikes(selectedPost.likes).length}
+              </button>
+              <span className="flex items-center gap-1 text-xs text-slate-400">
+                <MessageSquare className="h-3.5 w-3.5" /> {liveComments.length}
+              </span>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Comments</p>
+              {liveComments.length === 0 && (
+                <p className="text-xs text-slate-500">No comments yet — be the first.</p>
+              )}
+              {liveComments.map((c) => (
+                <div key={c.commentId} className="rounded-lg bg-white/5 px-3 py-2 text-xs text-slate-300">
+                  <span className="font-bold text-[#FFD700]">{c.userName}</span>
+                  {c.userEmail ? <span className="text-slate-500"> · {c.userEmail}</span> : null}
+                  <p className="mt-0.5 text-slate-300">{c.commentText}</p>
+                </div>
+              ))}
+              {canEngage && (
+                <div className="flex gap-2 pt-1">
+                  <Input
+                    value={commentDraft[selectedPost.id] || ""}
+                    onChange={(e) =>
+                      setCommentDraft((d) => ({ ...d, [selectedPost.id]: e.target.value }))
+                    }
+                    placeholder="Write a comment..."
+                    className="border-[#FFD700]/30 bg-white/5 text-white"
+                  />
+                  <Button
+                    size="sm"
+                    className="bg-[#FFA500] text-white"
+                    onClick={() => handleComment(selectedPost.id)}
+                  >
+                    Send
+                  </Button>
+                </div>
+              )}
+            </div>
+
             <div className="mt-4 flex gap-2">
-              <Button size="sm" variant="destructive" onClick={() => handleDelete(selectedPost.id, selectedPost.author)}>
-                <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
-              </Button>
+              {currentUser && selectedPost.authorUid === currentUser.uid && (
+                <Button size="sm" variant="destructive" onClick={() => handleDelete(selectedPost)}>
+                  <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
+                </Button>
+              )}
               <Button size="sm" variant="ghost" onClick={() => setSelectedPost(null)}>
                 Close
               </Button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal-only auth when guest tries like/comment while panel hidden (e.g. videos tab) */}
+      {showGuestJoin && authModalOpen && tab === "videos" && (
+        <CommunityGuestAuthPanel
+          open
+          variant="modal"
+          onClose={() => setAuthModalOpen(false)}
+          onAuthenticated={async () => {
+            setAuthModalOpen(false);
+            setAuthTick((n) => n + 1);
+          }}
+        />
       )}
     </div>
   );
@@ -616,8 +820,20 @@ function PostComposer({
         />
       )}
       <div className="mb-3 flex items-center gap-2">
-        <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => onImagePick(e.target.files?.[0])} />
-        <Button type="button" size="sm" variant="outline" className="border-[#FFD700]/30 text-xs" onClick={() => imageInputRef.current?.click()}>
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => onImagePick(e.target.files?.[0])}
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="border-[#FFD700]/30 text-xs"
+          onClick={() => imageInputRef.current?.click()}
+        >
           <ImageIcon className="mr-1 h-3.5 w-3.5" /> Upload image
         </Button>
         {imagePreview && (
@@ -629,81 +845,13 @@ function PostComposer({
           </>
         )}
       </div>
-      <Button disabled={submitting} className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#1a1a2e] font-bold" onClick={onSubmit}>
+      <Button
+        disabled={submitting}
+        className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#1a1a2e] font-bold"
+        onClick={onSubmit}
+      >
         <Upload className="mr-1 h-4 w-4" /> {submitting ? "Publishing..." : "Publish to Community"}
       </Button>
-    </div>
-  );
-}
-
-function StrategyCard({
-  post,
-  isLiked,
-  onLike,
-  onComment,
-  onViewProfile,
-}: {
-  post: CommunityPost;
-  isLiked: boolean;
-  onLike: () => void;
-  onComment: (text: string) => void;
-  onViewProfile: () => void;
-}) {
-  const [draft, setDraft] = useState("");
-  return (
-    <div className="rounded-2xl border border-[#FFD700]/20 bg-white/5 p-5">
-      <div className="mb-3 flex items-center gap-3">
-        <div
-          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-sm font-bold text-white"
-          style={{ background: "linear-gradient(135deg, #FFA500, #FFD700)" }}
-          onClick={onViewProfile}
-        >
-          {post.author.charAt(2)?.toUpperCase() ?? "U"}
-        </div>
-        <div>
-          <button type="button" onClick={onViewProfile} className="text-sm font-bold text-[#FFD700] hover:underline">
-            {post.author}
-          </button>
-          <p className="text-[10px] text-slate-500">{post.time}</p>
-        </div>
-      </div>
-      <h3 className="font-bold text-white">{post.title}</h3>
-      <p className="mt-1 text-sm text-slate-400">{post.content}</p>
-      {post.proofAttachment && (
-        <img src={post.proofAttachment} alt="" className="mt-3 max-h-48 w-full rounded-xl object-cover" />
-      )}
-      {post.beforeMetrics && (
-        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded-xl bg-red-500/10 p-2 text-red-300">
-            <p className="font-bold">Before</p>
-            <p>{post.beforeMetrics}</p>
-          </div>
-          <div className="rounded-xl bg-emerald-500/10 p-2 text-emerald-300">
-            <p className="font-bold">After</p>
-            <p>{post.afterMetrics}</p>
-          </div>
-        </div>
-      )}
-      <div className="mt-3 flex items-center gap-3">
-        <button type="button" onClick={onLike} className={`flex items-center gap-1 text-xs ${isLiked ? "text-red-400" : "text-slate-400"}`}>
-          <Heart className="h-3.5 w-3.5" fill={isLiked ? "currentColor" : "none"} /> {post.votes}
-        </button>
-        <span className="flex items-center gap-1 text-xs text-slate-500">
-          <MessageSquare className="h-3.5 w-3.5" /> {(post.comments ?? []).length}
-        </span>
-        <Lightbulb className="ml-auto h-4 w-4 text-[#FFD700]" />
-      </div>
-      <div className="mt-3 flex gap-2">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="Add a comment..."
-          className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white outline-none"
-        />
-        <Button size="sm" className="bg-[#FFA500] text-xs text-white" onClick={() => { onComment(draft); setDraft(""); }}>
-          Post
-        </Button>
-      </div>
     </div>
   );
 }
@@ -711,13 +859,12 @@ function StrategyCard({
 function AdSidebarCard({ title, subtitle, glow }: { title: string; subtitle: string; glow?: boolean }) {
   return (
     <div
-      className={`mb-3 cursor-pointer rounded-2xl border p-4 transition hover:scale-[1.02] ${
-        glow ? "founder-ad-glow border-[#FFD700]/50" : "border-white/10"
+      className={`mb-3 rounded-2xl border p-4 ${
+        glow ? "border-[#FFD700]/40 bg-[#FFD700]/10" : "border-white/10 bg-white/5"
       }`}
-      style={{ background: "rgba(255,215,0,0.05)" }}
     >
-      <p className="text-sm font-bold text-[#FFD700]">{title}</p>
-      <p className="mt-1 text-[10px] text-slate-400">{subtitle}</p>
+      <p className="text-sm font-bold text-white">{title}</p>
+      <p className="mt-1 text-xs text-slate-400">{subtitle}</p>
     </div>
   );
 }

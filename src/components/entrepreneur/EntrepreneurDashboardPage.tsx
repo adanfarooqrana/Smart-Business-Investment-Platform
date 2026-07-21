@@ -15,6 +15,7 @@ import { Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { KycPendingGate } from "@/components/kyc/KycPendingGate";
 import { streamUserKycStatus } from "@/services/adminKycService";
+import { KYC_BYPASS_FOR_TESTING } from "@/lib/kycBypass";
 
 export function EntrepreneurDashboardPage() {
   const navigate = useNavigate();
@@ -41,6 +42,11 @@ export function EntrepreneurDashboardPage() {
   const { ideas: myIdeas } = useFounderPitchedIdeas(founderUid || undefined);
 
   useEffect(() => {
+    if (KYC_BYPASS_FOR_TESTING) {
+      setKycPending(false);
+      setKycChecked(true);
+      return;
+    }
     if (!founderUid) {
       setKycChecked(true);
       setKycPending(false);

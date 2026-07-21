@@ -99,6 +99,7 @@ export function SiteHeader() {
             {/* Join Community Button styled as white background, black text */}
             <Link
               to="/app/community"
+              search={{ entry: "public" }}
               className="inline-flex items-center gap-1.5 rounded-full bg-white border border-slate-200 px-4.5 py-2 text-sm font-bold text-slate-900 hover:bg-slate-50 transition duration-200 shadow-sm cursor-pointer animate-pulse-glow"
             >
               <svg className="h-4.5 w-4.5 fill-orange-500" viewBox="0 0 20 20">

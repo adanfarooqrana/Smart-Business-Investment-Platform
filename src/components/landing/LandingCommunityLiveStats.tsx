@@ -17,21 +17,8 @@ const ROLE_LABEL: Record<string, string> = {
   consultant: "Wholesaler",
 };
 
-const ROLE_COLOR: Record<string, string> = {
-  entrepreneur: "#eab308",
-  business_owner: "#10b981",
-  business: "#10b981",
-  investor: "#06b6d4",
-  wholesaler: "#f97316",
-  consultant: "#f97316",
-};
-
 function roleLabel(role: string): string {
   return ROLE_LABEL[role] ?? role.replace(/_/g, " ");
-}
-
-function roleColor(role: string): string {
-  return ROLE_COLOR[role] ?? "#6366f1";
 }
 
 function timeAgo(ts: number): string {
@@ -75,32 +62,20 @@ function GlowPanel({
   title,
   icon,
   children,
-  accent = "orange",
 }: {
   title: string;
   icon: React.ReactNode;
   children: React.ReactNode;
-  accent?: "orange" | "emerald" | "cyan";
 }) {
-  const glow =
-    accent === "emerald"
-      ? "from-emerald-400/20 via-emerald-50/40 to-white shadow-emerald-200/40"
-      : accent === "cyan"
-        ? "from-cyan-400/20 via-cyan-50/40 to-white shadow-cyan-200/40"
-        : "from-orange-400/20 via-orange-50/40 to-white shadow-orange-200/40";
-
   return (
-    <div
-      className={`relative overflow-hidden rounded-3xl border border-orange-200/60 bg-gradient-to-br p-5 shadow-lg ${glow}`}
-    >
-      <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-orange-400/15 blur-2xl" />
-      <div className="relative z-10 mb-4 flex items-center gap-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/80 text-orange-600 shadow-sm">
+    <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm md:p-4">
+      <div className="relative z-10 mb-3 flex items-center gap-2">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-600">
           {icon}
         </div>
         <h3 className="font-display text-sm font-bold text-slate-900">{title}</h3>
-        <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+        <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-600">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
           Live DB
         </span>
       </div>
@@ -120,10 +95,10 @@ export function LandingCommunityLiveStats() {
 
   const roleBars = useMemo(
     () => [
-      { label: "Founders", value: stats.entrepreneurs, color: "#eab308" },
-      { label: "Business", value: stats.businessOwners, color: "#10b981" },
-      { label: "Investors", value: stats.investors, color: "#06b6d4" },
-      { label: "Wholesalers", value: stats.wholesalers, color: "#f97316" },
+      { label: "Founders", value: stats.entrepreneurs },
+      { label: "Business", value: stats.businessOwners },
+      { label: "Investors", value: stats.investors },
+      { label: "Wholesalers", value: stats.wholesalers },
     ],
     [stats],
   );
@@ -144,16 +119,16 @@ export function LandingCommunityLiveStats() {
   }, [members]);
 
   return (
-    <div className="mb-10 grid gap-5 lg:grid-cols-3">
+    <div className="mb-4 grid gap-4 lg:grid-cols-3">
       <GlowPanel title="Weekly signups" icon={<TrendingUp className="h-4 w-4" />}>
         <div className="flex h-36 items-end justify-between gap-1.5 px-1">
           {weekly.map((d) => {
             const h = Math.max(8, Math.round((d.count / maxWeek) * 100));
             return (
               <div key={d.label} className="flex flex-1 flex-col items-center gap-1">
-                <span className="text-[10px] font-bold text-orange-600">{d.count || ""}</span>
+                <span className="text-[10px] font-bold text-amber-600">{d.count || ""}</span>
                 <div
-                  className="w-full max-w-[2.5rem] rounded-t-lg bg-gradient-to-t from-orange-500 to-amber-300 shadow-[0_0_12px_rgba(249,115,22,0.45)] transition-all duration-500"
+                  className="w-full max-w-[2.5rem] rounded-t-lg bg-amber-500 transition-all duration-500"
                   style={{ height: `${h}%`, minHeight: d.count > 0 ? "1.5rem" : "0.5rem" }}
                 />
                 <span className="text-[9px] font-semibold text-slate-500">{d.label}</span>
@@ -162,11 +137,11 @@ export function LandingCommunityLiveStats() {
           })}
         </div>
         <p className="mt-3 text-center text-[10px] text-slate-500">
-          New registrations from Firebase <code className="text-orange-600">user_directory</code>
+          New registrations from Firebase <code className="text-amber-600">user_directory</code>
         </p>
       </GlowPanel>
 
-      <GlowPanel title="Ecosystem split" icon={<Users className="h-4 w-4" />} accent="emerald">
+      <GlowPanel title="Ecosystem split" icon={<Users className="h-4 w-4" />}>
         <div className="space-y-3">
           {roleBars.map((r) => (
             <div key={r.label}>
@@ -174,27 +149,23 @@ export function LandingCommunityLiveStats() {
                 <span>{r.label}</span>
                 <CountUp target={r.value} suffix="+" />
               </div>
-              <div className="h-2.5 overflow-hidden rounded-full bg-white/60">
+              <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
                 <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{
-                    width: `${statFill(r.value, 50)}%`,
-                    background: `linear-gradient(90deg, ${r.color}, ${r.color}99)`,
-                    boxShadow: `0 0 10px ${r.color}66`,
-                  }}
+                  className="h-full rounded-full bg-amber-500 transition-all duration-700"
+                  style={{ width: `${statFill(r.value, 50)}%` }}
                 />
               </div>
             </div>
           ))}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2 text-center">
-          <div className="rounded-xl bg-white/70 px-2 py-2">
+          <div className="rounded-xl bg-white px-2 py-2">
             <p className="text-[9px] font-bold uppercase text-slate-500">Total members</p>
             <p className="font-display text-lg font-black text-slate-900">
               <CountUp target={stats.totalMembers} />
             </p>
           </div>
-          <div className="rounded-xl bg-white/70 px-2 py-2">
+          <div className="rounded-xl bg-white px-2 py-2">
             <p className="text-[9px] font-bold uppercase text-slate-500">Community votes</p>
             <p className="font-display text-lg font-black text-slate-900">
               <CountUp target={stats.totalVotes} />
@@ -203,10 +174,10 @@ export function LandingCommunityLiveStats() {
         </div>
       </GlowPanel>
 
-      <GlowPanel title="Recent activity" icon={<Activity className="h-4 w-4" />} accent="cyan">
+      <GlowPanel title="Recent activity" icon={<Activity className="h-4 w-4" />}>
         {recent.length === 0 ? (
-          <div className="flex h-36 flex-col items-center justify-center rounded-2xl border border-dashed border-cyan-200/80 bg-white/50 text-center">
-            <Zap className="mb-2 h-6 w-6 text-cyan-400" />
+          <div className="flex h-36 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white text-center">
+            <Zap className="mb-2 h-6 w-6 text-amber-500" />
             <p className="text-xs font-semibold text-slate-600">Waiting for signups…</p>
             <p className="mt-1 text-[10px] text-slate-400">Register to appear here live</p>
           </div>
@@ -215,12 +186,9 @@ export function LandingCommunityLiveStats() {
             {recent.map((m) => (
               <li
                 key={m.uid}
-                className="flex items-center gap-2.5 rounded-xl border border-white/80 bg-white/70 px-3 py-2"
+                className="flex items-center gap-2.5 rounded-xl bg-white px-3 py-2"
               >
-                <div
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white"
-                  style={{ background: roleColor(m.role) }}
-                >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-xs font-bold text-white">
                   {(m.name || m.email || "?").charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -229,7 +197,7 @@ export function LandingCommunityLiveStats() {
                     {roleLabel(m.role)} · {m.createdAt ? timeAgo(m.createdAt) : "Joined"}
                   </p>
                 </div>
-                <span className="shrink-0 rounded-full bg-cyan-500/10 px-2 py-0.5 text-[8px] font-bold uppercase text-cyan-700">
+                <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[8px] font-bold uppercase text-amber-600">
                   New
                 </span>
               </li>
@@ -237,8 +205,8 @@ export function LandingCommunityLiveStats() {
           </ul>
         )}
         <p className="mt-3 text-center text-[10px] text-slate-500">
-          <span className="font-bold text-cyan-700">{activeToday}</span> active today ·{" "}
-          <span className="font-bold text-cyan-700">{stats.communityPosts}</span> lounge posts
+          <span className="font-bold text-amber-600">{activeToday}</span> active today ·{" "}
+          <span className="font-bold text-amber-600">{stats.communityPosts}</span> lounge posts
         </p>
       </GlowPanel>
     </div>

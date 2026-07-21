@@ -13,45 +13,31 @@ function FeaturedReview({ quote, active }: { quote: TestimonialQuote; active: bo
 
   return (
     <div
-      className={`review-card-in grid gap-8 md:grid-cols-[220px_1fr] items-center rounded-3xl border bg-white p-6 md:p-8 shadow-xl ${
+      className={`grid items-center gap-6 md:grid-cols-[220px_1fr] lg:gap-8 ${
         active ? "opacity-100" : "hidden"
       }`}
-      style={{
-        borderColor: `${quote.color}33`,
-        boxShadow: active ? `0 20px 50px ${quote.color}22, 0 0 40px ${quote.color}18` : undefined,
-      }}
     >
       <div className="relative mx-auto md:mx-0">
-        <div
-          className="absolute -inset-2 rounded-3xl blur-xl opacity-50"
-          style={{ background: `radial-gradient(circle, ${quote.color}55, transparent 70%)` }}
-        />
         <img
           src={quote.imageUrl}
           alt={quote.name}
-          className="relative h-48 w-48 rounded-3xl object-cover border-4 border-white shadow-2xl"
+          className="relative h-48 w-48 rounded-2xl object-cover shadow-sm"
         />
-        <span
-          className="absolute -bottom-2 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-lg"
-          style={{ background: `linear-gradient(135deg, ${quote.color}, ${quote.color}cc)` }}
-        >
+        <span className="absolute -bottom-2 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-600 shadow-sm">
           <BadgeCheck className="h-3.5 w-3.5" /> Verified Review
         </span>
       </div>
 
       <div className="text-center md:text-left">
-        <div className="mb-3 flex justify-center md:justify-start gap-1">
+        <div className="mb-3 flex justify-center gap-1 md:justify-start">
           {Array.from({ length: 5 }).map((_, i) => (
             <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
           ))}
         </div>
-        <blockquote
-          className="landing-review-quote-glow font-display text-xl md:text-2xl font-semibold leading-relaxed min-h-[4.5rem]"
-          style={{ color: quote.color, ["--quote-glow" as string]: quote.color }}
-        >
+        <blockquote className="font-display min-h-[4.5rem] text-xl font-semibold leading-relaxed text-slate-900 md:text-2xl">
           &ldquo;{renderTypedWithKeywords(typed)}
           {!typingDone && active && (
-            <span className="ml-0.5 inline-block h-6 w-0.5 animate-pulse bg-current align-middle opacity-70" />
+            <span className="ml-0.5 inline-block h-6 w-0.5 animate-pulse bg-amber-500 align-middle opacity-70" />
           )}
           &rdquo;
         </blockquote>
@@ -86,24 +72,24 @@ export function LandingVerifiedReviews({ quotes }: LandingVerifiedReviewsProps) 
   if (!active) return null;
 
   return (
-    <section className="border-b border-slate-100 bg-gradient-to-b from-amber-50/40 to-white w-full py-12 md:py-16">
-      <div className="mx-auto max-w-[960px] w-[95%]">
-        <div className="mb-8 text-center space-y-2">
-          <p className="inline-flex items-center gap-2 rounded-full bg-emerald-100 border border-emerald-200 px-3.5 py-1.5 text-xs font-bold text-emerald-700">
+    <section className="my-2 w-full bg-[#f5f5f5] px-4 md:my-3">
+      <div className="mx-auto max-w-7xl rounded-[2.5rem] border border-slate-200/90 bg-white px-6 py-6 shadow-sm md:px-10 md:py-8">
+        <div className="mb-4 space-y-2 text-center">
+          <p className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3.5 py-1.5 text-xs font-semibold text-amber-600">
             <BadgeCheck className="h-3.5 w-3.5" /> Verified Reviews
           </p>
-          <h2 className="font-display text-3xl md:text-4xl font-extrabold text-slate-900">
+          <h2 className="font-display text-3xl font-extrabold text-slate-900 md:text-4xl">
             Trusted by growing businesses
           </h2>
         </div>
 
-        <div className="relative min-h-[320px]">
+        <div className="relative mx-auto min-h-[240px] max-w-4xl">
           {quotes.map((q, i) => (
             <FeaturedReview key={q.id} quote={q} active={i === activeIndex} />
           ))}
         </div>
 
-        <div className="mt-6 flex justify-center gap-2">
+        <div className="mt-4 flex justify-center gap-2">
           {quotes.map((q, i) => (
             <button
               key={q.id}

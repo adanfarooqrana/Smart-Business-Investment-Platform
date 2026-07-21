@@ -1,12 +1,12 @@
-import { useEffect, useState, useRef } from "react";
+import { useState, useRef } from "react";
 
 type DataPoint = {
   month: string;
   revenue: string;
   funding: string;
   x: number;
-  yRev: number;  // Y coordinate for revenue line
-  yFund: number; // Y coordinate for funding line
+  yRev: number;
+  yFund: number;
   detail: string;
 };
 
@@ -21,7 +21,7 @@ const POINTS: DataPoint[] = [
 ];
 
 export function HeroGrowthDashboard() {
-  const [hoveredIdx, setHoveredIdx] = useState<number>(4); // Default highlighting Month 5
+  const [hoveredIdx, setHoveredIdx] = useState<number>(4);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -48,160 +48,117 @@ export function HeroGrowthDashboard() {
 
   const revPathD = POINTS.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.yRev}`).join(" ");
   const fundPathD = POINTS.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.yFund}`).join(" ");
-
   const activePoint = POINTS[hoveredIdx];
 
   return (
-    <div className="relative w-full max-w-[440px] mx-auto flex items-center justify-center">
-      {/* Self-contained premium animations */}
+    <div className="relative mx-auto flex w-full max-w-[440px] items-center justify-center">
       <style>{`
         @keyframes lineDraw {
-          to {
-            stroke-dashoffset: 0;
-          }
+          to { stroke-dashoffset: 0; }
         }
         @keyframes popIn {
           0% { transform: scale(0); opacity: 0; }
           100% { transform: scale(1); opacity: 1; }
         }
-        @keyframes ambientFloat {
-          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.45; }
-          50% { transform: translate(25px, -18px) scale(1.15); opacity: 0.65; }
-        }
-        @keyframes bounceTooltip {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-4px); }
-        }
         .anim-line-rev {
           stroke-dasharray: 450;
           stroke-dashoffset: 450;
-          animation: lineDraw 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          animation: lineDraw 2s ease-out forwards;
         }
         .anim-line-fund {
           stroke-dasharray: 450;
           stroke-dashoffset: 450;
-          animation: lineDraw 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-          animation-delay: 0.25s;
+          animation: lineDraw 2s ease-out forwards;
+          animation-delay: 0.2s;
         }
         .anim-node {
           transform-origin: center;
-          animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-        }
-        .float-blob-1 {
-          animation: ambientFloat 9s ease-in-out infinite alternate;
-        }
-        .float-blob-2 {
-          animation: ambientFloat 12s ease-in-out infinite alternate-reverse;
-        }
-        .bounce-tip {
-          animation: bounceTooltip 2s ease-in-out infinite;
+          animation: popIn 0.4s ease-out both;
         }
       `}</style>
 
-      {/* Modern, soft ambient gradient meshes in background */}
-      <div className="absolute top-1/10 left-1/10 w-48 h-48 rounded-full bg-gradient-to-tr from-amber-400/20 to-transparent blur-3xl float-blob-1 pointer-events-none" />
-      <div className="absolute bottom-1/10 right-1/10 w-44 h-44 rounded-full bg-gradient-to-br from-emerald-400/15 to-transparent blur-3xl float-blob-2 pointer-events-none" />
-
-      {/* Main Container Card */}
-      <div className="relative w-full overflow-hidden rounded-[24px] border border-slate-150 bg-white/95 p-5 shadow-[0_25px_50px_-12px_rgba(15,23,42,0.06)] backdrop-blur-md">
-        {/* Fine background grid */}
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.03)_1px,transparent_1px)] bg-[size:16px_16px] opacity-80" />
-
-        {/* Legend / Metrics Header */}
-        <div className="relative z-10 flex items-center justify-between mb-4">
-          <div className="flex flex-col gap-0.5">
+      <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm md:p-4">
+        <div className="relative z-10 mb-3 flex items-center justify-between">
+          <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-amber-500" />
-              <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">Gross Revenue</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                Gross Revenue
+              </span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">Investment Raised</span>
+              <span className="h-2 w-2 rounded-full bg-emerald-600" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                Investment Raised
+              </span>
             </div>
           </div>
-          
+
           <div className="text-right">
-            <div className="text-xs font-black text-slate-900">{activePoint.month}</div>
-            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{activePoint.detail}</div>
+            <div className="text-xs font-semibold text-slate-800">{activePoint.month}</div>
+            <div className="text-[9px] font-medium uppercase tracking-wider text-slate-500">
+              {activePoint.detail}
+            </div>
           </div>
         </div>
 
-        {/* Dynamic SVG Graph */}
-        <div className="relative z-10 p-1">
+        <div className="relative z-10">
           <svg
             ref={svgRef}
             viewBox="0 0 340 150"
-            className="w-full h-auto overflow-visible cursor-crosshair select-none"
+            className="h-auto w-full cursor-crosshair select-none overflow-visible"
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
           >
-            {/* Grid horizontal lines */}
-            <line x1="10" y1="25" x2="330" y2="25" stroke="rgba(0,0,0,0.04)" strokeDasharray="3 3" />
-            <line x1="10" y1="75" x2="330" y2="75" stroke="rgba(0,0,0,0.04)" strokeDasharray="3 3" />
-            <line x1="10" y1="125" x2="330" y2="125" stroke="rgba(0,0,0,0.04)" strokeDasharray="3 3" />
+            <line x1="10" y1="25" x2="330" y2="25" stroke="#e2e8f0" strokeDasharray="3 3" />
+            <line x1="10" y1="75" x2="330" y2="75" stroke="#e2e8f0" strokeDasharray="3 3" />
+            <line x1="10" y1="125" x2="330" y2="125" stroke="#e2e8f0" strokeDasharray="3 3" />
 
-            <defs>
-              <linearGradient id="rev-grad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#eab308" />
-                <stop offset="100%" stopColor="#d97706" />
-              </linearGradient>
-              <linearGradient id="fund-grad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#10b981" />
-                <stop offset="100%" stopColor="#059669" />
-              </linearGradient>
-            </defs>
-
-            {/* Vertical crosshair tracker */}
             {activePoint && (
               <line
                 x1={activePoint.x}
                 y1="15"
                 x2={activePoint.x}
                 y2="135"
-                stroke="rgba(100,116,139,0.25)"
+                stroke="#cbd5e1"
                 strokeDasharray="2 2"
-                strokeWidth="1.5"
+                strokeWidth="1"
               />
             )}
 
-            {/* Revenue Line */}
             <path
               d={revPathD}
               fill="none"
-              stroke="url(#rev-grad)"
-              strokeWidth="3.5"
+              stroke="#f59e0b"
+              strokeWidth="2.5"
               strokeLinecap="round"
               className="anim-line-rev"
             />
 
-            {/* Investment Line */}
             <path
               d={fundPathD}
               fill="none"
-              stroke="url(#fund-grad)"
-              strokeWidth="3"
+              stroke="#059669"
+              strokeWidth="2.5"
               strokeLinecap="round"
               className="anim-line-fund"
             />
 
-            {/* Sequential popping nodes */}
             {POINTS.map((pt, idx) => (
-              <g key={idx} className="anim-node" style={{ animationDelay: `${idx * 0.12}s` }}>
-                {/* Revenue Node dot */}
+              <g key={idx} className="anim-node" style={{ animationDelay: `${idx * 0.1}s` }}>
                 <circle
                   cx={pt.x}
                   cy={pt.yRev}
-                  r={hoveredIdx === idx ? 5.5 : 2.5}
-                  fill="#d97706"
+                  r={hoveredIdx === idx ? 5 : 2.5}
+                  fill="#f59e0b"
                   stroke="#ffffff"
                   strokeWidth="1.5"
                   className="transition-all duration-200"
                 />
-                {/* Funding Node dot */}
                 <circle
                   cx={pt.x}
                   cy={pt.yFund}
-                  r={hoveredIdx === idx ? 5.5 : 2.5}
+                  r={hoveredIdx === idx ? 5 : 2.5}
                   fill="#059669"
                   stroke="#ffffff"
                   strokeWidth="1.5"
@@ -210,17 +167,16 @@ export function HeroGrowthDashboard() {
               </g>
             ))}
 
-            {/* Interactive tooltip values */}
             {activePoint && (
               <g
-                transform={`translate(${activePoint.x > 240 ? activePoint.x - 110 : activePoint.x + 10}, 30)`}
-                className="pointer-events-none bounce-tip"
+                transform={`translate(${activePoint.x > 240 ? activePoint.x - 110 : activePoint.x + 10}, 28)`}
+                className="pointer-events-none"
               >
-                <rect x="0" y="0" width="100" height="42" rx="8" fill="#0f172a" opacity="0.95" />
-                <text x="10" y="18" fill="#f59e0b" fontSize="9.5" fontWeight="800" fontFamily="sans-serif">
+                <rect x="0" y="0" width="100" height="40" rx="8" fill="#ffffff" stroke="#e2e8f0" />
+                <text x="10" y="17" fill="#475569" fontSize="9.5" fontWeight="600" fontFamily="sans-serif">
                   Rev: {activePoint.revenue}
                 </text>
-                <text x="10" y="32" fill="#10b981" fontSize="9.5" fontWeight="800" fontFamily="sans-serif">
+                <text x="10" y="31" fill="#1e293b" fontSize="9.5" fontWeight="600" fontFamily="sans-serif">
                   Fund: {activePoint.funding}
                 </text>
               </g>
@@ -228,11 +184,10 @@ export function HeroGrowthDashboard() {
           </svg>
         </div>
 
-        {/* Minimal metrics footer */}
-        <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-100 text-[10px] font-bold text-slate-400 tracking-wider">
+        <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-[10px] font-medium tracking-wider text-slate-500">
           <span>START</span>
-          <span>VALUATION: PKR 5.0M</span>
-          <span className="text-emerald-500 font-extrabold">ACCELERATING</span>
+          <span className="text-slate-800">VALUATION: PKR 5.0M</span>
+          <span>ACCELERATING</span>
         </div>
       </div>
     </div>

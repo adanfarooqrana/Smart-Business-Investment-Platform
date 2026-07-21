@@ -45,11 +45,16 @@ interface CustomerSiteProps {
 function normalizeProduct(key: string, raw: any): Product {
   const sale = Number(raw?.sale_price ?? raw?.price ?? 0) || 0;
   const real = Number(raw?.real_price ?? raw?.product_cost ?? Math.round(sale * 0.4)) || 0;
-  const images: string[] = Array.isArray(raw?.images) && raw.images.length
-    ? raw.images.filter(Boolean)
-    : raw?.image_url
-      ? [raw.image_url]
-      : [];
+  const fromArrays = [
+    ...(Array.isArray(raw?.imageUrls) ? raw.imageUrls : []),
+    ...(Array.isArray(raw?.images) ? raw.images : []),
+  ]
+    .map((u: unknown) => String(u || "").trim())
+    .filter(Boolean);
+  const legacy = String(raw?.productImageUrl || raw?.image_url || "").trim();
+  const merged =
+    legacy && !fromArrays.includes(legacy) ? [legacy, ...fromArrays] : fromArrays;
+  const images: string[] = [...new Set(merged)].slice(0, 3);
   return {
     id: raw?.id || key,
     name: String(raw?.name || "Product"),

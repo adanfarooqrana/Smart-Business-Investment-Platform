@@ -3,8 +3,12 @@ import OrdersAnalytics from "@/pages/OrdersAnalytics";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useAppState } from "@/hooks/useAppState";
+import { blockCommunityMemberFromWorkspace } from "@/lib/routeGuards";
 
 export const Route = createFileRoute("/dashboard/orders")({
+  beforeLoad: () => {
+    blockCommunityMemberFromWorkspace();
+  },
   component: DashboardOrdersLayout,
 });
 

@@ -309,41 +309,7 @@ export function subscribeToFollowing(userId: string, callback: (ids: string[]) =
 
 // ─── Sticky Notes (Community Posts tab) ──────────────────────────────────────
 
-export const FALLBACK_STICKY_NOTES: StickyNote[] = [
-  {
-    id: "demo-1",
-    category: "Rice",
-    color: "#FFD966",
-    content: "Bulk Basmati supplier available — Gujranwala cluster, MOQ 50 bags.",
-    author: "u/rice_king_pk",
-    authorId: "demo",
-    likes: 12,
-    views: 45,
-    createdAt: Date.now() - 86400000,
-  },
-  {
-    id: "demo-2",
-    category: "Tech",
-    color: "#AED6F1",
-    content: "Loyalty app boosted our cafe return rate from 15% to 48% in 3 months!",
-    author: "u/cafe_founder",
-    authorId: "demo",
-    likes: 28,
-    views: 102,
-    createdAt: Date.now() - 172800000,
-  },
-  {
-    id: "demo-3",
-    category: "Packaging",
-    color: "#B5EAD7",
-    content: "Eco-friendly biodegradable boxes — national shipping, MOQ 500 units.",
-    author: "u/packaging_pro",
-    authorId: "demo",
-    likes: 8,
-    views: 31,
-    createdAt: Date.now() - 259200000,
-  },
-];
+export const FALLBACK_STICKY_NOTES: StickyNote[] = [];
 
 export function subscribeToStickyNotes(callback: (notes: StickyNote[]) => void) {
   try {
@@ -351,7 +317,7 @@ export function subscribeToStickyNotes(callback: (notes: StickyNote[]) => void) 
       ref(database, RTDB.communityPosts),
       (snap) => {
         if (!snap.exists()) {
-          callback(FALLBACK_STICKY_NOTES);
+          callback([]);
           return;
         }
         const list: StickyNote[] = [];
@@ -359,20 +325,16 @@ export function subscribeToStickyNotes(callback: (notes: StickyNote[]) => void) 
           const val = child.val();
           if (val?.type === "sticky_note") list.push({ id: child.key!, ...val });
         });
-        callback(
-          list.length > 0
-            ? list.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
-            : FALLBACK_STICKY_NOTES,
-        );
+        callback(list.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)));
       },
       (error) => {
         console.warn("sticky notes subscribe error:", error);
-        callback(FALLBACK_STICKY_NOTES);
+        callback([]);
       },
     );
   } catch (err) {
     console.warn("sticky notes init error:", err);
-    callback(FALLBACK_STICKY_NOTES);
+    callback([]);
     return () => {};
   }
 }

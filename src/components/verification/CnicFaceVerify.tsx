@@ -17,6 +17,7 @@ import {
   compressDataUrl,
   runFaceMatchPipeline,
 } from "@/lib/kycService";
+import { KYC_BYPASS_FOR_TESTING, KYC_BYPASS_PLACEHOLDER_IMAGE } from "@/lib/kycBypass";
 
 export type CnicFaceResult = {
   cnicFront: string;
@@ -56,6 +57,51 @@ const ACCENTS = {
 };
 
 export function CnicFaceVerify({
+  onComplete,
+  onMatchFailed,
+  accent = "amber",
+  className = "",
+}: CnicFaceVerifyProps) {
+  const a = ACCENTS[accent];
+
+  // Testing: skip camera/CNIC — mark Done and continue
+  useEffect(() => {
+    if (!KYC_BYPASS_FOR_TESTING) return;
+    const t = window.setTimeout(() => {
+      onComplete({
+        cnicFront: KYC_BYPASS_PLACEHOLDER_IMAGE,
+        cnicBack: KYC_BYPASS_PLACEHOLDER_IMAGE,
+        liveSelfie: KYC_BYPASS_PLACEHOLDER_IMAGE,
+        faceMatchScore: 100,
+        matchConfidenceScore: 100,
+      });
+    }, 400);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (KYC_BYPASS_FOR_TESTING) {
+    return (
+      <div className={`rounded-2xl border border-emerald-200 bg-emerald-50/80 p-6 text-center ${className}`}>
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
+          <CheckCircle2 className="h-6 w-6" />
+        </div>
+        <p className={`text-sm font-bold ${a.text}`}>KYC temporarily disabled for testing</p>
+        <p className="mt-1 text-xs text-slate-500">
+          CNIC + live selfie skipped. Continuing as <span className="font-semibold text-emerald-700">Done</span>.
+        </p>
+        <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-xs font-bold text-white">
+          <CheckCircle2 className="h-3.5 w-3.5" /> Done
+        </div>
+      </div>
+    );
+  }
+
+  return <CnicFaceVerifyActive onComplete={onComplete} onMatchFailed={onMatchFailed} accent={accent} className={className} />;
+}
+
+/** Original KYC UI — kept intact for when bypass is turned off. */
+function CnicFaceVerifyActive({
   onComplete,
   onMatchFailed,
   accent = "amber",

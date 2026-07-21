@@ -178,11 +178,46 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
     setRegistrationError("");
 
     try {
+      const { ensureCloudinaryUrl } = await import("@/lib/cloudinaryUpload");
+      const [cnicFrontUrl, cnicBackUrl, selfieUrl] = await Promise.all([
+        ensureCloudinaryUrl(formData.cnicFront, "cnic_verifications"),
+        ensureCloudinaryUrl(formData.cnicBack, "cnic_verifications"),
+        ensureCloudinaryUrl(formData.liveSelfie, "selfies"),
+      ]);
+
       await BusinessOwnerService.registerStep4(uid, {
-        cnicFrontUrl: formData.cnicFront,
-        cnicBackUrl: formData.cnicBack,
-        selfieUrl: formData.liveSelfie,
+        cnicFrontUrl,
+        cnicBackUrl,
+        selfieUrl,
       });
+
+      try {
+        const { doc, setDoc, serverTimestamp } = await import("firebase/firestore");
+        const { firestore } = await import("@/firebase");
+        await setDoc(
+          doc(firestore, "users", uid),
+          {
+            role: "business_owner",
+            cnicFrontUrl,
+            cnicBackUrl,
+            liveSelfieUrl: selfieUrl,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        await setDoc(
+          doc(firestore, "business_owners", uid),
+          {
+            cnicFrontUrl,
+            cnicBackUrl,
+            liveSelfieUrl: selfieUrl,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      } catch (fsErr) {
+        console.warn("Firestore CNIC mirror skipped:", fsErr);
+      }
 
       const { submitPendingKycReview } = await import("@/services/adminKycService");
       await submitPendingKycReview({
@@ -197,9 +232,9 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
         location: formData.location,
         category: formData.category,
         registerNumber: formData.registerNumber,
-        cnicFrontUrl: formData.cnicFront,
-        cnicBackUrl: formData.cnicBack,
-        liveSelfieUrl: formData.liveSelfie,
+        cnicFrontUrl,
+        cnicBackUrl,
+        liveSelfieUrl: selfieUrl,
         matchConfidenceScore: formData.faceMatchScore,
       });
 
@@ -216,9 +251,9 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
         about: formData.about || `A premium ${formData.category} business based in ${formData.location}.`,
         registerNumber: formData.registerNumber,
         trademark: formData.trademark || "None",
-        cnicFront: formData.cnicFront,
-        cnicBack: formData.cnicBack,
-        liveSelfie: formData.liveSelfie,
+        cnicFront: cnicFrontUrl,
+        cnicBack: cnicBackUrl,
+        liveSelfie: selfieUrl,
       });
 
       await refreshUserData(uid);
@@ -228,7 +263,11 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
       setStep(4);
     } catch (err: unknown) {
       console.error(err);
-      setRegistrationError(friendlyIdentityError(err) || "Registration failed. Please check inputs.");
+      setRegistrationError(
+        err instanceof Error
+          ? err.message
+          : friendlyIdentityError(err) || "Registration failed. Please check inputs.",
+      );
       setVerifyingDetails(false);
     }
   };
@@ -347,7 +386,7 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
                       </Label>
                       <Input
                         id="owner-name"
-                        placeholder="Aanya Mehta"
+                        placeholder="Enter your full name"
                         value={formData.fullName}
                         onChange={(e) => handleInputChange("fullName", e.target.value)}
                         required
@@ -361,7 +400,7 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
                       <Input
                         id="owner-email"
                         type="email"
-                        placeholder="aanya@brand.com"
+                        placeholder="Enter your email address"
                         value={formData.email}
                         onChange={(e) => handleInputChange("email", e.target.value)}
                         required
@@ -375,7 +414,7 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
                       <Input
                         id="owner-password"
                         type="password"
-                        placeholder="Create secure password"
+                        placeholder="Create your secure password"
                         value={formData.password}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -429,7 +468,7 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
                   <Label htmlFor="biz-name">Official Business Name <span className="text-destructive">*</span></Label>
                   <Input
                     id="biz-name"
-                    placeholder="Luna Bistro"
+                    placeholder="Enter your business name"
                     value={formData.businessName}
                     onChange={(e) => handleInputChange("businessName", e.target.value)}
                     required
@@ -442,7 +481,7 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
                   </Label>
                   <Input
                     id="owner-cnic"
-                    placeholder="e.g. 42101-1234567-8"
+                    placeholder="Enter your CNIC number (e.g. 42101-1234567-8)"
                     value={formData.cnic}
                     onChange={(e) => handleInputChange("cnic", e.target.value)}
                     required
@@ -467,7 +506,7 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
                   <Label htmlFor="biz-exact-location">Exact Location</Label>
                   <Input
                     id="biz-exact-location"
-                    placeholder="e.g. Shop #12, 2nd Floor, Al-Rehman Plaza, Street 5, Block B"
+                    placeholder="Enter your exact business address"
                     value={formData.exactLocation}
                     onChange={(e) => handleInputChange("exactLocation", e.target.value)}
                   />
@@ -491,7 +530,7 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
                     <Label htmlFor="biz-subcat">Subcategory / Type</Label>
                     <Input
                       id="biz-subcat"
-                      placeholder="e.g. Fine Dining Cafe"
+                      placeholder="Enter your business subcategory"
                       value={formData.subcategory}
                       onChange={(e) => handleInputChange("subcategory", e.target.value)}
                     />
@@ -518,7 +557,7 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
                   </Label>
                   <Input
                     id="biz-trade"
-                    placeholder="e.g. TM-77889"
+                    placeholder="Enter your registered trademark number"
                     value={formData.trademark}
                     onChange={(e) => handleInputChange("trademark", e.target.value)}
                     required
@@ -531,7 +570,7 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
                     id="biz-about"
                     className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     rows={2}
-                    placeholder="Luna Bistro is an organic farm-to-table lunch eatery..."
+                    placeholder="Enter your business description"
                     value={formData.about}
                     onChange={(e) => handleInputChange("about", e.target.value)}
                   />
@@ -544,7 +583,7 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
                   <Input
                     id="owner-phone"
                     type="tel"
-                    placeholder="+92 300 1234567"
+                    placeholder="Enter your phone number"
                     value={formData.phone}
                     onChange={(e) => handleInputChange("phone", e.target.value)}
                     required

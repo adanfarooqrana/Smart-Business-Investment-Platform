@@ -125,7 +125,7 @@ function BizBoardPage() {
         </div>
         <div className="flex gap-6 text-sm font-bold text-slate-600">
           <Link to="/" className="hover:text-amber-600 transition">Home</Link>
-          <Link to="/app/community" className="hover:text-amber-600 transition">Community</Link>
+          <Link to="/app/community" search={{ entry: "public" }} className="hover:text-amber-600 transition">Community</Link>
         </div>
       </nav>
 

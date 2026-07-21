@@ -285,6 +285,7 @@ export function PitchIdeaWizard({
 
     setSubmitting(true);
     try {
+      // Images upload to Cloudinary inside pitchIdea() before Firestore write
       const customProjections = projections
         ? { ...projections, expenseBreakdown: expenseLines }
         : undefined;

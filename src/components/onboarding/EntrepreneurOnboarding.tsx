@@ -39,7 +39,8 @@ const BG_VIDEO_FALLBACK_2 = "/videos/investor-signup.mp4";
 
 const STEPS = [
   "Account & Email",
-  "CNIC, Banking & KYC",
+  "CNIC, Banking & Phone",
+  "Biometric KYC",
   "Admin Approval",
 ];
 
@@ -146,10 +147,11 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
         !!form.bankName.trim() &&
         !!form.accountTitle.trim() &&
         !!form.bankAccountNumber.trim() &&
-        !!form.phone.trim() &&
-        !!verify &&
-        verify.faceMatchScore >= 70
+        !!form.phone.trim()
       );
+    }
+    if (step === 2) {
+      return !!verify && verify.faceMatchScore >= 70;
     }
     return true;
   };
@@ -207,33 +209,32 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
       });
 
       setSubmitPhase("CNIC photos upload ho rahi hain...");
-      const { uploadBase64Image } = await import(
-        "@/services/firebaseService"
-      );
+      const { ensureCloudinaryUrl } = await import("@/lib/cloudinaryUpload");
 
-      const uploadOne = async (fileName: string, data: string) => {
+      const uploadOne = async (data: string, folder: "cnic_verifications" | "selfies") => {
         try {
           return await withTimeout(
-            uploadBase64Image(uid, fileName, data),
-            30000,
-            `Upload ${fileName}`,
+            ensureCloudinaryUrl(data, folder),
+            45000,
+            "Cloudinary upload",
           );
         } catch (uploadErr) {
-          console.warn(`CNIC upload skipped (${fileName}):`, uploadErr);
+          console.warn(`CNIC Cloudinary upload skipped:`, uploadErr);
           return "";
         }
       };
 
-      const [cnicFrontUrl, cnicBackUrl] = await Promise.all([
-        uploadOne("cnic-front.jpg", verify.cnicFront),
-        uploadOne("cnic-back.jpg", verify.cnicBack),
+      const [cnicFrontUrl, cnicBackUrl, liveSelfieUrl] = await Promise.all([
+        uploadOne(verify.cnicFront, "cnic_verifications"),
+        uploadOne(verify.cnicBack, "cnic_verifications"),
+        uploadOne(verify.liveSelfie, "selfies"),
       ]);
-      await uploadOne("live-selfie.jpg", verify.liveSelfie);
 
       // Persist KYC assets into nested founders/{uid}/profile (pending admin approval)
       await rtdbUpdate(ref(database, FOUNDER_PROFILE(uid)), {
         cnicFrontUrl: cnicFrontUrl || "",
         cnicBackUrl: cnicBackUrl || "",
+        liveSelfieUrl: liveSelfieUrl || "",
         faceMatchScore: verify.faceMatchScore || 0,
         matchConfidenceScore: verify.matchConfidenceScore || verify.faceMatchScore || 0,
         status: "pending",
@@ -241,9 +242,28 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
         isApproved: false,
       });
 
+      // Also mirror Cloudinary URLs to Firestore users/{uid}
+      try {
+        const { doc, setDoc, serverTimestamp } = await import("firebase/firestore");
+        const { firestore } = await import("@/firebase");
+        await setDoc(
+          doc(firestore, "users", uid),
+          {
+            cnicFrontUrl: cnicFrontUrl || null,
+            cnicBackUrl: cnicBackUrl || null,
+            liveSelfieUrl: liveSelfieUrl || null,
+            role: "founder",
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      } catch (fsErr) {
+        console.warn("Firestore CNIC mirror skipped:", fsErr);
+      }
+
       const frontData = cnicFrontUrl || verify.cnicFront || "";
       const backData = cnicBackUrl || verify.cnicBack || "";
-      const selfieData = verify.liveSelfie || "";
+      const selfieData = liveSelfieUrl || verify.liveSelfie || "";
 
       await submitPendingKycReview({
         uid,
@@ -283,7 +303,7 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
       });
 
       setPendingUid(uid);
-      setStep(2);
+      setStep(3);
     } catch (err: unknown) {
       setError(friendlyIdentityError(err));
     } finally {
@@ -457,7 +477,7 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
                         <Input
                           value={form.fullName}
                           onChange={(e) => set("fullName", e.target.value)}
-                          placeholder="Ali Hassan"
+                          placeholder="Enter your full name"
                           required
                         />
                       </div>
@@ -470,7 +490,7 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
                           type="email"
                           value={form.email}
                           onChange={(e) => set("email", e.target.value)}
-                          placeholder="founder@startup.pk"
+                          placeholder="Enter your email address"
                           required
                         />
                       </div>
@@ -483,7 +503,7 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
                           type="password"
                           value={form.password}
                           onChange={(e) => set("password", e.target.value)}
-                          placeholder="Minimum 6 characters"
+                          placeholder="Create your secure password"
                           required
                         />
                       </div>
@@ -492,11 +512,11 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
                 </div>
               )}
 
-              {/* STEP 1: CNIC, BANKING, KYC + PHONE */}
+              {/* STEP 1: CNIC NUMBER, BANKING + PHONE (no photo upload) */}
               {step === 1 && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-3 duration-300 max-h-[60vh] overflow-y-auto pr-2">
                   <p className="rounded-xl bg-[#FFF8E1] px-3 py-2 text-xs text-slate-600 font-medium">
-                    CNIC, banking details, biometric face match, and phone number.
+                    Enter your CNIC number, banking details, and phone number.
                   </p>
 
                   <div className="space-y-1.5">
@@ -566,24 +586,6 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
                     </div>
                   </div>
 
-                  <div>
-                    <p className="mb-3 text-xs text-slate-500">
-                      Upload CNIC Front and Back, then capture a live webcam selfie.
-                      Facial match of 70% or greater is required before admin review.
-                    </p>
-                    <CnicFaceVerify
-                      accent="amber"
-                      onComplete={(result) => setVerify(result)}
-                      onMatchFailed={() => setVerify(null)}
-                    />
-                    {verify && verify.faceMatchScore >= 70 && (
-                      <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-700">
-                        <CheckCircle2 className="mr-1 inline h-4 w-4" />
-                        Face matched successfully ({Math.round(verify.faceMatchScore)}% confidence)!
-                      </div>
-                    )}
-                  </div>
-
                   <div className="space-y-1.5">
                     <Label className="flex items-center gap-1">
                       <Phone className="h-3.5 w-3.5" /> Phone Number{" "}
@@ -600,8 +602,29 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
                 </div>
               )}
 
-              {/* STEP 2: WAIT FOR ADMIN APPROVAL */}
-              {step === 2 && pendingUid && (
+              {/* STEP 2: BIOMETRIC KYC — CNIC photos + live selfie */}
+              {step === 2 && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-3 duration-300 max-h-[60vh] overflow-y-auto pr-2">
+                  <p className="rounded-xl bg-[#FFF8E1] px-3 py-2 text-xs text-slate-600 font-medium">
+                    Upload CNIC Front and Back, then capture a live webcam selfie.
+                    Facial match of 70% or greater is required before admin review.
+                  </p>
+                  <CnicFaceVerify
+                    accent="amber"
+                    onComplete={(result) => setVerify(result)}
+                    onMatchFailed={() => setVerify(null)}
+                  />
+                  {verify && verify.faceMatchScore >= 70 && (
+                    <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-700">
+                      <CheckCircle2 className="mr-1 inline h-4 w-4" />
+                      Face matched successfully ({Math.round(verify.faceMatchScore)}% confidence)!
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* STEP 3: WAIT FOR ADMIN APPROVAL */}
+              {step === 3 && pendingUid && (
                 <div className="animate-in zoom-in-95 duration-400">
                   <KycPendingGate
                     uid={pendingUid}
@@ -612,7 +635,7 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
                 </div>
               )}
 
-              {step < 2 && (
+              {step < 3 && (
                 <div className="mt-6 flex items-center justify-between gap-3 border-t border-[#FFA500]/20 pt-4">
                   <Button
                     type="button"
@@ -654,6 +677,18 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
                   )}
 
                   {step === 1 && (
+                    <Button
+                      type="button"
+                      disabled={!canNext()}
+                      onClick={() => setStep(2)}
+                      className="rounded-full text-white"
+                      style={{ background: "linear-gradient(135deg, #FFA500, #FFD700)" }}
+                    >
+                      Continue <ArrowRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  )}
+
+                  {step === 2 && (
                     <Button
                       type="button"
                       disabled={!canNext() || submitting || submitDone}

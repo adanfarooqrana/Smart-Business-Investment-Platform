@@ -724,16 +724,37 @@ export const triggerPayoutRequest = async (uid: string, payoutId: string, balanc
   }
 };
 
-export const lockPayoutAsCompleted = async (uid: string, payoutId: string) => {
+export const lockPayoutAsCompleted = async (
+  uid: string,
+  payoutId: string,
+  payoutReceiptUrl?: string,
+) => {
   try {
     await update(ref(db, FOUNDER_PAYMENT(uid, payoutId)), {
       status: "completed",
       updatedAt: Date.now(),
+      ...(payoutReceiptUrl
+        ? { payoutReceiptUrl, transferSlipUrl: payoutReceiptUrl }
+        : {}),
     });
   } catch (error) {
     console.error("Payout confirmation write error:", error);
     throw error;
   }
+};
+
+/** Attach a Cloudinary payout transfer slip to an existing payout request. */
+export const attachPayoutReceipt = async (
+  uid: string,
+  payoutId: string,
+  payoutReceiptUrl: string,
+) => {
+  await update(ref(db, FOUNDER_PAYMENT(uid, payoutId)), {
+    payoutReceiptUrl,
+    transferSlipUrl: payoutReceiptUrl,
+    status: "proof_uploaded",
+    updatedAt: Date.now(),
+  });
 };
 
 export const streamFounderPayments = (uid: string, callback: (payments: any[]) => void) => {

@@ -24,8 +24,12 @@ export type PackagingQuote = {
 export type CommunityPost = {
   id: string;
   author: string;
-  role: "business" | "consultant" | "investor" | "admin" | "guest" | "system";
-  badge?: "Verified Consultant" | "Business Owner" | "Investor" | "Admin" | "Guest";
+  /** Personal display name (founder name, or owner name for business) */
+  authorName?: string;
+  /** Business store name — shown with authorName for business posts */
+  businessName?: string;
+  role: "business" | "consultant" | "investor" | "admin" | "guest" | "system" | "entrepreneur" | "community_member";
+  badge?: "Verified Consultant" | "Business Owner" | "Investor" | "Admin" | "Guest" | "Founder" | "Community Member";
   category?: string;
   tag?: string;
   avatarColor: string;
@@ -182,123 +186,7 @@ export type CallNote = {
   attachments?: { name: string; url: string }[];
 };
 
-const DEFAULT_COMMUNITY_POSTS: CommunityPost[] = [
-  {
-    id: "post-pred-1",
-    author: "u/growth_hacker_pk",
-    role: "consultant",
-    badge: "Verified Consultant",
-    category: "Insight Board",
-    tag: "Prediction",
-    avatarColor: "bg-blue-600",
-    time: "2 hours ago",
-    title: "🔮 Future Market Prediction: Gujranwala Wholesale demand shifts to Biodegradable items",
-    content: "I predict that eco-friendly packaging demand in the Gujranwala cluster will surge by over 45% in the next quarter due to local green retail initiatives. Verify this prediction soon!",
-    votes: 38,
-    comments: [],
-    isPrediction: true,
-    predictionTimer: 45,
-    predictionExpiryTime: Date.now() + 45000,
-    predictionStatus: "active"
-  },
-  {
-    id: "post-mkt-1",
-    author: "u/coffee_bean_founder",
-    role: "business",
-    badge: "Business Owner",
-    category: "Marketing Strategy",
-    tag: "Tactics",
-    avatarColor: "bg-emerald-500",
-    time: "1 day ago",
-    title: "🚀 Before/After Loyalty App Launch Performance Metrics",
-    content: "Here is the blueprint for our digital stamp cards. We rotated discounts weekly, boosting return visits and score ratings.",
-    beforeMetrics: "15% Customer Return Rate, 4.1 Rating Score",
-    afterMetrics: "48% Customer Return Rate, 4.8 Rating Score (+120% conversion)",
-    isMarketingBlueprint: true,
-    votes: 55,
-    comments: []
-  },
-  {
-    id: "post-pkg-1",
-    author: "u/retail_revolution",
-    role: "business",
-    badge: "Business Owner",
-    category: "B2B Packaging",
-    tag: "Requirements",
-    avatarColor: "bg-emerald-600",
-    time: "3 hours ago",
-    title: "📦 Requirement: 5,000 Custom Printed Biodegradable Courier Bags",
-    content: "We need courier mailers with gold-leaf custom branding. Material must be eco-friendly and fully water-resistant.",
-    isPackagingReq: true,
-    materialType: "Biodegradable Plastic / Kraft Paper",
-    votes: 12,
-    comments: [],
-    packagingQuotes: [
-      {
-        id: "quote-1",
-        supplierName: "Sarah Sterling (Wholesaler)",
-        avatarColor: "bg-gradient-to-tr from-purple-500 to-pink-600",
-        price: "PKR 45,000 total",
-        timeline: "3 business days delivery",
-        accepted: false
-      },
-      {
-        id: "quote-2",
-        supplierName: "Gujranwala Package Co.",
-        avatarColor: "bg-gradient-to-tr from-amber-500 to-orange-500",
-        price: "PKR 41,000 total",
-        timeline: "7 business days delivery",
-        accepted: false
-      }
-    ]
-  },
-  {
-    id: "post-prob-1",
-    author: "u/fashion_boutique_hyd",
-    role: "business",
-    badge: "Business Owner",
-    category: "Problems Hub",
-    tag: "Logistics",
-    avatarColor: "bg-indigo-500",
-    time: "5 hours ago",
-    title: "⚠️ Problem: Raw cotton delivery delays from central Punjab",
-    content: "We're facing a 5-day lag in raw cotton arrivals, halting our sewing assembly lines. Any vetted regional logistics provider who can expedite dispatch?",
-    isProblem: true,
-    urgency: "High",
-    nicheOwnersNotified: ["Sarah Sterling", "Zain Malik", "Aman Ullah"],
-    aiResolutionMock: "AI Suggestion: Consider establishing a buffer stock of 15% using Gujranwala's localized warehousing grid rather than reliance on direct real-time haulage. Partnering with Punjab Freight Express could expedite this route by 36 hours.",
-    votes: 8,
-    comments: []
-  },
-  {
-    id: "post-1",
-    author: "u/coffee_bean_founder",
-    role: "business",
-    badge: "Business Owner",
-    category: "Success Story",
-    tag: "Funding",
-    avatarColor: "bg-emerald-500",
-    time: "5 hours ago",
-    title: "How we increased our SmartBiz reputation score to 94 and secured $150k in VC funding in 30 days!",
-    content: "Hey everyone! Wanted to share our success story. We registered our coffee brand, synced reviews, and used the AI Consultant advice to run text loyalty promos. Yesterday, we closed seed funding! It's all about reputation proof.",
-    photoType: "coffee",
-    votes: 142,
-    comments: [
-      {
-        author: "u/bakery_queen",
-        avatarColor: "bg-pink-500",
-        time: "4h ago",
-        content: "Outstanding! Did you show the investor your review ledger page directly?"
-      },
-      {
-        author: "u/coffee_bean_founder",
-        avatarColor: "bg-emerald-500",
-        time: "3h ago",
-        content: "Yes, we sent them the verified landing page link. The reviews were cryptographically linked to transactions, which they loved!"
-      }
-    ]
-  }
-];
+const DEFAULT_COMMUNITY_POSTS: CommunityPost[] = [];
 
 export type Review = {
   id: string;
@@ -832,6 +720,22 @@ if (typeof window !== "undefined") {
     if (!globalState.communityPosts) {
       globalState.communityPosts = DEFAULT_COMMUNITY_POSTS;
     }
+    // Drop legacy demo / seed community posts from older localStorage snapshots
+    const DEMO_POST_IDS = new Set([
+      "post-pred-1",
+      "post-mkt-1",
+      "post-pkg-1",
+      "post-prob-1",
+      "post-1",
+      "demo-1",
+      "demo-2",
+      "demo-3",
+    ]);
+    if (Array.isArray(globalState.communityPosts)) {
+      globalState.communityPosts = globalState.communityPosts.filter(
+        (p) => p && !DEMO_POST_IDS.has(p.id) && !String(p.id).startsWith("demo-"),
+      );
+    }
     if (!globalState.likedPosts) {
       globalState.likedPosts = [];
     }
@@ -957,6 +861,8 @@ function mapFirebaseCommunityPost(fp: Record<string, unknown> & { id: string }):
   return {
     id: fp.id,
     author: String(fp.author ?? "u/anonymous"),
+    authorName: fp.authorName as string | undefined,
+    businessName: fp.businessName as string | undefined,
     role: (fp.role as CommunityPost["role"]) ?? "guest",
     badge: fp.badge as CommunityPost["badge"],
     category: fp.category as string | undefined,
@@ -997,6 +903,8 @@ function syncCommunityPostPayload(
 ) {
   return {
     author: post.author,
+    authorName: post.authorName,
+    businessName: post.businessName,
     role: post.role,
     badge: post.badge,
     category: post.category,
@@ -1416,11 +1324,10 @@ export function useAppState() {
       }
     }
     const firebaseIds = new Set(mapped.map((p) => p.id));
-    const seeded = (DEFAULT_COMMUNITY_POSTS as CommunityPost[]).filter((p) => !firebaseIds.has(p.id));
     const pendingLocal = globalState.communityPosts.filter(
       (p) => p.id.startsWith("post-") && !firebaseIds.has(p.id),
     );
-    globalState.communityPosts = [...mapped, ...pendingLocal, ...seeded];
+    globalState.communityPosts = [...mapped, ...pendingLocal];
     saveState();
   };
 
@@ -2222,7 +2129,7 @@ export function useAppState() {
     investments: globalState.investments,
     communityPosts: Array.isArray(globalState.communityPosts)
       ? globalState.communityPosts
-      : DEFAULT_COMMUNITY_POSTS,
+      : [],
     points: globalState.points !== undefined ? globalState.points : 120,
     weaknessFeedback: globalState.weaknessFeedback || [],
     stage1InvestorQueries: globalState.stage1InvestorQueries || [],

@@ -15,7 +15,12 @@ export interface CanonicalProduct {
     real_price: number;
     sale_price: number;
     quantity: number;
+    /** Up to 3 Cloudinary HTTPS URLs (main, angle, detail) */
     images: string[];
+    /** Alias of images — preferred write key for storefront */
+    imageUrls?: string[];
+    /** Primary / first image (backward compatible) */
+    productImageUrl?: string;
 }
 
 export interface WebsiteSettings {
@@ -37,10 +42,23 @@ export interface ProductReview {
     timestamp: number;
 }
 
-const DEFAULT_PRODUCT_IMAGES = [
-    "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600&q=80",
-    "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=600&q=80",
-];
+/** Normalize up to 3 HTTPS/Cloudinary image URLs with legacy field fallbacks. */
+function normalizeImageList(
+    images?: string[] | null,
+    imageUrls?: string[] | null,
+    productImageUrl?: string | null,
+): string[] {
+    const fromArrays = [
+        ...(Array.isArray(imageUrls) ? imageUrls : []),
+        ...(Array.isArray(images) ? images : []),
+    ]
+        .map((u) => String(u || "").trim())
+        .filter(Boolean);
+    const primary = String(productImageUrl || "").trim();
+    const merged = primary && !fromArrays.includes(primary) ? [primary, ...fromArrays] : fromArrays;
+    const unique = [...new Set(merged)].slice(0, 3);
+    return unique.length > 0 ? unique : [];
+}
 
 function nextProductKey(existingKeys: string[]): string {
     let max = 0;
@@ -413,12 +431,15 @@ export class BusinessOwnerService {
             real_price: number;
             quantity?: number;
             images?: string[];
+            imageUrls?: string[];
+            productImageUrl?: string;
         }
     ): Promise<string> {
         const productsRef = ref(db, `business_owners/${uid}/products`);
         const snap = await get(productsRef);
         const existing = snap.exists() ? Object.keys(snap.val()) : [];
         const id = nextProductKey(existing);
+        const images = normalizeImageList(data.images, data.imageUrls, data.productImageUrl);
         const product: CanonicalProduct = {
             id,
             name: data.name.trim(),
@@ -426,7 +447,9 @@ export class BusinessOwnerService {
             sale_price: Number(data.sale_price) || 0,
             real_price: Number(data.real_price) || 0,
             quantity: data.quantity ?? 50,
-            images: data.images?.length ? data.images.slice(0, 2) : [...DEFAULT_PRODUCT_IMAGES],
+            images,
+            imageUrls: images,
+            productImageUrl: images[0] || "",
         };
         await set(ref(db, `business_owners/${uid}/products/${id}`), product);
         return id;
@@ -438,7 +461,14 @@ export class BusinessOwnerService {
         productId: string,
         data: Partial<CanonicalProduct>
     ): Promise<void> {
-        await update(ref(db, `business_owners/${uid}/products/${productId}`), data);
+        const patch: Partial<CanonicalProduct> = { ...data };
+        if (data.images || data.imageUrls || data.productImageUrl !== undefined) {
+            const images = normalizeImageList(data.images, data.imageUrls, data.productImageUrl);
+            patch.images = images;
+            patch.imageUrls = images;
+            patch.productImageUrl = images[0] || "";
+        }
+        await update(ref(db, `business_owners/${uid}/products/${productId}`), patch);
     }
 
     /** Delete a product key. */

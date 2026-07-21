@@ -29,18 +29,33 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { useAppState } from "@/hooks/useAppState";
+import { useAuth } from "@/contexts/AuthContext";
+import { clearCommunitySession } from "@/components/community/CommunityGuestAuthPanel";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 export function AppSidebar() {
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const navigate = useNavigate();
   const { role, business, investor, consultant, entrepreneur, isLoggedIn, resetState } = useAppState();
+  const { logout } = useAuth();
 
   // Dynamically assemble items based on active role
-  const getSidebarItems = () => {
+  const getSidebarItems = (): Array<{
+    title: string;
+    url: string;
+    icon: typeof MessageSquare;
+    search?: Record<string, string>;
+  }> => {
+    const communityItem = {
+      title: "Community Lounge",
+      url: "/app/community",
+      icon: MessageSquare,
+      search: { entry: "workspace" },
+    };
     const commonItems = [
-      { title: "Community Lounge", url: "/app/community", icon: MessageSquare },
+      communityItem,
       { title: "BizBoard", url: "/app/bizboard", icon: MessageSquare },
     ];
 
@@ -51,13 +66,13 @@ export function AppSidebar() {
         { title: "Orders & Revenue Analytics", url: "/dashboard/orders", icon: LineChart },
         { title: "AI Strategy Consultant", url: "/app/consultant", icon: Bot },
         { title: "Wholesale Sourcing Hub", url: "/app/wholesale", icon: Boxes },
-        { title: "Community Lounge", url: "/app/community", icon: MessageSquare },
+        communityItem,
       ];
     } else if (isLoggedIn && role === "investor") {
       return [
         { title: "AI Investor Desk", url: "/app/investor", icon: TrendingUp },
         { title: "AI Investment Expert", url: "/app/consultant", icon: Bot },
-        ...commonItems,
+        communityItem,
       ];
     } else if (isLoggedIn && role === "consultant") {
       return [
@@ -68,7 +83,7 @@ export function AppSidebar() {
     } else if (isLoggedIn && role === "entrepreneur") {
       return [
         { title: "Founder Dashboard", url: "/founder/dashboard", icon: Lightbulb },
-        { title: "Community Lounge", url: "/app/community", icon: MessageSquare },
+        communityItem,
       ];
     } else {
       // Guest
@@ -83,6 +98,28 @@ export function AppSidebar() {
 
   const items = getSidebarItems();
 
+  const handleWorkspaceLogout = async () => {
+    try {
+      clearCommunitySession();
+      await logout();
+      resetState();
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.removeItem("token");
+          localStorage.removeItem("session_token");
+          localStorage.removeItem("auth_token");
+          sessionStorage.clear();
+        } catch {
+          /* ignore */
+        }
+      }
+      toast.success("Logged out.");
+      void navigate({ to: "/" });
+    } catch (err) {
+      console.error(err);
+      toast.error("Logout failed.");
+    }
+  };
   // Retrieve initials for Avatar
   const getAvatarInitials = () => {
     if (isLoggedIn && role === "business") {
@@ -139,7 +176,11 @@ export function AppSidebar() {
               {items.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={pathname === item.url}>
-                    <Link to={item.url} className="flex items-center gap-3">
+                    <Link
+                      to={item.url}
+                      search={item.search}
+                      className="flex items-center gap-3"
+                    >
                       <item.icon className="h-5 w-5" />
                       <span>{item.title}</span>
                     </Link>
@@ -181,10 +222,7 @@ export function AppSidebar() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                resetState();
-                navigate({ to: "/" });
-              }}
+              onClick={() => void handleWorkspaceLogout()}
               className="w-full justify-start gap-3 h-10 px-3 text-red-400 hover:bg-red-500/10 hover:text-red-300 text-[13.5px]"
             >
               <LogOut className="h-4.5 w-4.5" />

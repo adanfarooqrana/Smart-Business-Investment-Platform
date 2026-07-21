@@ -1,4 +1,4 @@
-import type { CommunityComment, PackagingQuote } from "@/hooks/useAppState";
+import type { CommunityComment, CommunityPost, PackagingQuote } from "@/hooks/useAppState";
 
 /** Firebase RTDB may store comments as array or keyed object. */
 export function normalizeComments(raw: unknown): CommunityComment[] {
@@ -24,4 +24,15 @@ export function getPackagingQuotePrice(
   quotes: PackagingQuote[] | Record<string, PackagingQuote> | undefined,
 ): string {
   return getPrimaryPackagingQuote(quotes)?.price ?? "Contact for quote";
+}
+
+/** Founder → personal name. Business → "Business Name · Owner Name". */
+export function formatPostAuthorLabel(
+  post: Pick<CommunityPost, "role" | "author" | "authorName" | "businessName">,
+): string {
+  const person = (post.authorName || post.author || "Member").replace(/^u\//, "").replace(/_/g, " ");
+  if (post.role === "business" && post.businessName?.trim()) {
+    return `${post.businessName.trim()} · ${person}`;
+  }
+  return person;
 }

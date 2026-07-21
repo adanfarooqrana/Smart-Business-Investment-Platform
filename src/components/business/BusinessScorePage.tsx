@@ -5,7 +5,6 @@ import {
   Globe,
   Sparkles,
   ExternalLink,
-  CheckCircle2,
   Trash2,
   Plus,
 } from "lucide-react";
@@ -13,6 +12,8 @@ import { useAppState } from "@/hooks/useAppState";
 import { useBusinessSession } from "@/hooks/useBusinessSession";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { CloudinaryImageField } from "@/components/ui/CloudinaryImageField";
+import { ProductImageSlots } from "@/components/business/ProductImageSlots";
 import { updateBusinessScore } from "@/services/firebaseService";
 import { GeminiService } from "@/services/geminiService";
 import {
@@ -22,6 +23,9 @@ import {
 } from "@/services/businessOwnerService";
 import { db } from "@/firebase";
 import { onValue, ref } from "firebase/database";
+import { toast } from "sonner";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { firestore } from "@/firebase";
 
 type ProductForm = {
   id: string;
@@ -30,8 +34,31 @@ type ProductForm = {
   sale_price: number;
   real_price: number;
   quantity: number;
+  /** Up to 3 Cloudinary URLs (slot-indexed; empty string = vacant slot) */
+  imageUrls: string[];
+  /** Alias kept in sync with imageUrls for RTDB consumers */
   images: string[];
 };
+
+/** Pad/trim to exactly 3 slot strings for the upload UI. */
+function toImageSlots(
+  imageUrls?: string[] | null,
+  images?: string[] | null,
+  productImageUrl?: string | null,
+  image_url?: string | null,
+): string[] {
+  const fromArrays = [
+    ...(Array.isArray(imageUrls) ? imageUrls : []),
+    ...(Array.isArray(images) ? images : []),
+  ]
+    .map((u) => String(u || "").trim())
+    .filter(Boolean);
+  const legacy = String(productImageUrl || image_url || "").trim();
+  const merged =
+    legacy && !fromArrays.includes(legacy) ? [legacy, ...fromArrays] : fromArrays;
+  const unique = [...new Set(merged)].slice(0, 3);
+  return [unique[0] || "", unique[1] || "", unique[2] || ""];
+}
 
 const emptyNewProduct = (): Omit<ProductForm, "id"> => ({
   name: "",
@@ -39,21 +66,19 @@ const emptyNewProduct = (): Omit<ProductForm, "id"> => ({
   sale_price: 0,
   real_price: 0,
   quantity: 50,
-  images: [
-    "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600&q=80",
-    "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=600&q=80",
-  ],
+  imageUrls: ["", "", ""],
+  images: ["", "", ""],
 });
 
 function normalizeProduct(key: string, raw: any): ProductForm {
   const sale = Number(raw?.sale_price ?? raw?.price ?? 0) || 0;
   const real = Number(raw?.real_price ?? raw?.product_cost ?? Math.round(sale * 0.4)) || 0;
-  const images: string[] = Array.isArray(raw?.images) && raw.images.length
-    ? raw.images.slice(0, 2)
-    : [
-        raw?.image_url || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600&q=80",
-        "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=600&q=80",
-      ];
+  const imageUrls = toImageSlots(
+    raw?.imageUrls,
+    raw?.images,
+    raw?.productImageUrl,
+    raw?.image_url,
+  );
   return {
     id: raw?.id || key,
     name: String(raw?.name || ""),
@@ -61,8 +86,13 @@ function normalizeProduct(key: string, raw: any): ProductForm {
     sale_price: sale,
     real_price: real,
     quantity: Number(raw?.quantity ?? 50) || 50,
-    images,
+    imageUrls,
+    images: imageUrls,
   };
+}
+
+function compactImageUrls(slots: string[]): string[] {
+  return slots.map((u) => String(u || "").trim()).filter(Boolean).slice(0, 3);
 }
 
 export function BusinessScorePage() {
@@ -228,14 +258,33 @@ export function BusinessScorePage() {
 
   const handleSaveBanner = async () => {
     if (!uid) return;
+    if (!logoUrl.trim() && !bannerImageUrl.trim()) {
+      toast.error("Upload a logo or banner image first.");
+      return;
+    }
     setSavingBanner(true);
     try {
-      await BusinessOwnerService.updateWebsiteSettings(uid, {
+      const settings: Partial<WebsiteSettings> = {
         banner_title: bannerTitle,
         banner_description: bannerDescription,
         logo_url: logoUrl.trim(),
         banner_image_url: bannerImageUrl.trim(),
-      });
+      };
+      await BusinessOwnerService.updateWebsiteSettings(uid, settings);
+
+      // Mirror Cloudinary URLs onto Firestore business profile
+      await setDoc(
+        doc(firestore, "business_owners", uid),
+        {
+          bannerUrl: bannerImageUrl.trim() || null,
+          logoUrl: logoUrl.trim() || null,
+          banner_title: bannerTitle,
+          banner_description: bannerDescription,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      toast.success("Website settings saved with Cloudinary images.");
     } catch (err: any) {
       alert(err.message || "Failed to save banner settings.");
     } finally {
@@ -249,13 +298,16 @@ export function BusinessScorePage() {
     );
   };
 
-  const updateLocalProductImage = (id: string, imageUrl: string) => {
+  const updateLocalProductImageSlot = (id: string, slotIndex: number, imageUrl: string) => {
     setProducts((prev) =>
-      prev.map((product) =>
-        product.id === id
-          ? { ...product, images: [imageUrl, ...product.images.slice(1)].slice(0, 2) }
-          : product,
-      ),
+      prev.map((product) => {
+        if (product.id !== id) return product;
+        const next = [...(product.imageUrls?.length ? product.imageUrls : product.images)];
+        while (next.length < 3) next.push("");
+        next[slotIndex] = imageUrl;
+        const slots = next.slice(0, 3);
+        return { ...product, imageUrls: slots, images: slots };
+      }),
     );
   };
 
@@ -263,15 +315,31 @@ export function BusinessScorePage() {
     if (!uid) return;
     setSavingProductId(product.id);
     try {
+      const imageUrls = compactImageUrls(product.imageUrls?.length ? product.imageUrls : product.images);
+      const productImageUrl = imageUrls[0] || "";
       const payload: Partial<CanonicalProduct> = {
         name: product.name,
         description: product.description,
         sale_price: Number(product.sale_price) || 0,
         real_price: Number(product.real_price) || 0,
         quantity: Number(product.quantity) || 0,
-        images: product.images,
+        images: imageUrls,
+        imageUrls,
+        productImageUrl,
       };
       await BusinessOwnerService.updateProduct(uid, product.id, payload);
+
+      await setDoc(
+        doc(firestore, "business_owners", uid, "products", product.id),
+        {
+          ...payload,
+          imageUrls,
+          productImageUrl: productImageUrl || null,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      toast.success("Product saved.");
     } catch (err: any) {
       alert(err.message || "Failed to save product.");
     } finally {
@@ -297,15 +365,40 @@ export function BusinessScorePage() {
     }
     setAddingProduct(true);
     try {
-      await BusinessOwnerService.addProduct(uid, {
+      const imageUrls = compactImageUrls(
+        newProduct.imageUrls?.length ? newProduct.imageUrls : newProduct.images,
+      );
+      const productId = await BusinessOwnerService.addProduct(uid, {
         name: newProduct.name,
         description: newProduct.description,
         sale_price: Number(newProduct.sale_price) || 0,
         real_price: Number(newProduct.real_price) || 0,
         quantity: Number(newProduct.quantity) || 50,
-        images: newProduct.images,
+        images: imageUrls,
+        imageUrls,
+        productImageUrl: imageUrls[0] || "",
       });
+
+      await setDoc(
+        doc(firestore, "business_owners", uid, "products", productId),
+        {
+          id: productId,
+          name: newProduct.name.trim(),
+          description: newProduct.description.trim(),
+          sale_price: Number(newProduct.sale_price) || 0,
+          real_price: Number(newProduct.real_price) || 0,
+          quantity: Number(newProduct.quantity) || 50,
+          images: imageUrls,
+          imageUrls,
+          productImageUrl: imageUrls[0] || null,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
       setNewProduct(emptyNewProduct());
+      toast.success("Product added to catalog.");
     } catch (err: any) {
       alert(err.message || "Failed to add product.");
     } finally {
@@ -475,27 +568,19 @@ export function BusinessScorePage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Logo Image URL
-                    </label>
-                    <input
-                      type="url"
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400"
+                    <CloudinaryImageField
+                      label="Business Logo"
+                      folder="business_logos"
                       value={logoUrl}
-                      onChange={(e) => setLogoUrl(e.target.value)}
-                      placeholder="https://example.com/logo.png"
+                      onUploaded={setLogoUrl}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Banner Image URL (Cover Photo)
-                    </label>
-                    <input
-                      type="url"
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400"
+                    <CloudinaryImageField
+                      label="Banner / Cover Photo"
+                      folder="business_banners"
                       value={bannerImageUrl}
-                      onChange={(e) => setBannerImageUrl(e.target.value)}
-                      placeholder="https://example.com/banner.jpg"
+                      onUploaded={setBannerImageUrl}
                     />
                   </div>
                 </div>
@@ -522,9 +607,6 @@ export function BusinessScorePage() {
                       <h3 className="font-display text-lg font-extrabold text-slate-900">
                         Product Catalog & Assets
                       </h3>
-                      <p className="text-xs text-slate-500">
-                        Live products from business_owners/{`{uid}`}/products — auto-filled after AI generation.
-                      </p>
                     </div>
                   </div>
                   <span className="rounded-full border border-amber-200 bg-amber-50 px-4 py-1.5 text-xs font-bold text-amber-700">
@@ -621,27 +703,13 @@ export function BusinessScorePage() {
                         </div>
                       </div>
 
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-amber-600">
-                          Product Image URL
-                        </label>
-                        <input
-                          type="url"
-                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400"
-                          placeholder="https://example.com/product.jpg"
-                          value={slot.images?.[0] || ""}
-                          onChange={(e) => updateLocalProductImage(slot.id, e.target.value)}
-                        />
-                      </div>
-
-                      {slot.images?.[0] && (
-                        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
-                          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                          <span className="text-[10px] font-bold text-emerald-700 truncate">
-                            Image URL linked
-                          </span>
-                        </div>
-                      )}
+                      <ProductImageSlots
+                        images={slot.imageUrls?.length ? slot.imageUrls : slot.images}
+                        onSlotUploaded={(index, url) =>
+                          updateLocalProductImageSlot(slot.id, index, url)
+                        }
+                        disabled={savingProductId === slot.id}
+                      />
 
                       <Button
                         onClick={() => handleSaveProduct(slot)}
@@ -713,23 +781,19 @@ export function BusinessScorePage() {
                           }
                         />
                       </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-amber-600">
-                          Product Image URL
-                        </label>
-                        <input
-                          type="url"
-                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs"
-                          placeholder="https://example.com/product.jpg"
-                          value={newProduct.images[0] || ""}
-                          onChange={(e) =>
-                            setNewProduct((product) => ({
-                              ...product,
-                              images: [e.target.value, ...product.images.slice(1)].slice(0, 2),
-                            }))
-                          }
-                        />
-                      </div>
+                      <ProductImageSlots
+                        images={newProduct.imageUrls}
+                        onSlotUploaded={(index, url) =>
+                          setNewProduct((product) => {
+                            const next = [...product.imageUrls];
+                            while (next.length < 3) next.push("");
+                            next[index] = url;
+                            const slots = next.slice(0, 3);
+                            return { ...product, imageUrls: slots, images: slots };
+                          })
+                        }
+                        disabled={addingProduct}
+                      />
                       <Button
                         onClick={handleAddProduct}
                         disabled={addingProduct}

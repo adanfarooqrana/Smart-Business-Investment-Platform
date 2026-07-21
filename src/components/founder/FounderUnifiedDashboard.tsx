@@ -26,6 +26,7 @@ import {
   fetchFounderWorkspace,
   streamFounderWorkspace,
   streamFounderApprovedLedgerAndStats,
+  attachPayoutReceipt,
   type FounderWorkspaceSnapshot,
   type FounderApprovedLedgerRow,
 } from "../../services/founderFirebaseService";
@@ -107,6 +108,7 @@ export function FounderUnifiedDashboard({
 }: Props) {
   const navigate = useNavigate();
   const { logout, currentUser } = useAuth();
+  const { communityPosts, likedPosts, resetState } = useAppState();
   const activeUid = founderUid || currentUser?.uid || "";
   const [activeView, setActiveView] = useState<"dashboard" | "community">("dashboard");
   const [activeTab, setActiveTab] = useState<"workspace" | "ideas" | "payout" | "community" | "samples" | "messages">("workspace");
@@ -117,7 +119,6 @@ export function FounderUnifiedDashboard({
   const [showProfile, setShowProfile] = useState(false);
   const [sunGlow, setSunGlow] = useState<"none" | "community" | "profile">("none");
   const [paymentOpen, setPaymentOpen] = useState(false);
-  const { communityPosts, likedPosts } = useAppState();
 
   const [editingIdeaId, setEditingIdeaId] = useState<string | null>(null);
   const [editingInitialData, setEditingInitialData] = useState<any>(null);
@@ -125,6 +126,7 @@ export function FounderUnifiedDashboard({
   const [payoutStatus, setPayoutStatus] = useState<"Pending" | "Delivered">("Pending");
   const [payoutStage, setPayoutStage] = useState<"initial" | "requested" | "proof_uploaded" | "completed">("initial");
   const [activePayoutId, setActivePayoutId] = useState<string | null>(null);
+  const [payoutReceiptUrl, setPayoutReceiptUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Tab #1: live 2-box stats from approved pitches/{pitchId}/transactions
@@ -377,8 +379,20 @@ export function FounderUnifiedDashboard({
 
   const handleLogout = async () => {
     try {
+      const { clearCommunitySession } = await import(
+        "@/components/community/CommunityGuestAuthPanel"
+      );
+      clearCommunitySession();
       await logout();
-      navigate({ to: "/app/login" });
+      resetState();
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.clear();
+        } catch {
+          /* ignore */
+        }
+      }
+      navigate({ to: "/" });
       toast.success("Successfully logged out.");
     } catch (err) {
       console.error(err);
@@ -510,7 +524,10 @@ export function FounderUnifiedDashboard({
     setIsSubmitting(true);
     const payoutId = activePayoutId || `payout-completed-${Date.now()}`;
     try {
-      await lockPayoutAsCompleted(activeUid, payoutId);
+      if (payoutReceiptUrl && activeUid) {
+        await attachPayoutReceipt(activeUid, payoutId, payoutReceiptUrl);
+      }
+      await lockPayoutAsCompleted(activeUid, payoutId, payoutReceiptUrl || undefined);
       setPayoutStage("completed");
       setPayoutStatus("Delivered");
       toast.success("Receipt confirmed & marked as paid! Funds transferred.");
@@ -725,7 +742,13 @@ export function FounderUnifiedDashboard({
                 founderId={founderUid}
                 founderUsername={founderUsername}
                 displayName={displayName}
+                ownerName={displayName}
+                authorPhoto={
+                  String(currentUser?.photoURL || "").trim() || undefined
+                }
                 userRole="entrepreneur"
+                entry="workspace"
+                backLabel="← Back to Dashboard"
                 isOpen
                 embedded
                 onClose={() => {
@@ -984,7 +1007,7 @@ export function FounderUnifiedDashboard({
                     </div>
 
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      Incoming Escrow Ledger
+                      Incoming Payment
                     </p>
 
                     {/* Live inbound ledger: bank specs, receipt, Mark as Paid */}

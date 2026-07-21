@@ -23,8 +23,13 @@ import { ReviewSubmitWidget } from "@/components/ReviewSubmitWidget";
 import { InvestorDashboardErrorBoundary } from "@/components/investor/InvestorDashboardErrorBoundary";
 import { KycPendingGate } from "@/components/kyc/KycPendingGate";
 import { streamUserKycStatus } from "@/services/adminKycService";
+import { blockCommunityMemberFromWorkspace } from "@/lib/routeGuards";
+import { KYC_BYPASS_FOR_TESTING } from "@/lib/kycBypass";
 
 export const Route = createFileRoute("/app/investor")({
+  beforeLoad: () => {
+    blockCommunityMemberFromWorkspace();
+  },
   component: InvestorPage,
 });
 
@@ -61,6 +66,11 @@ function InvestorDashboard() {
   const investorUid = String(currentUser?.uid || "").trim();
 
   useEffect(() => {
+    if (KYC_BYPASS_FOR_TESTING) {
+      setKycPending(false);
+      setKycChecked(true);
+      return;
+    }
     if (!investorUid) {
       setKycChecked(true);
       setKycPending(false);

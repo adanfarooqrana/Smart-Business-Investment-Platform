@@ -1,6 +1,36 @@
-{
-  "rules": {
-    ".read": true,
-    ".write": true
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isWorkspacePoster() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/business_owners/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/entrepreneurs/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/founders/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/investors/$(request.auth.uid))
+      );
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.authorUid == request.auth.uid;
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn() && resource.data.authorUid == request.auth.uid;
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isSignedIn()
+          && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if true;
+    }
   }
 }
