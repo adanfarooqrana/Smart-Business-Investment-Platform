@@ -302,7 +302,10 @@ export function subscribeToFollowing(userId: string, callback: (ids: string[]) =
   return onValue(ref(database, RTDB.followers(userId)), (snap) => {
     if (!snap.exists()) { callback([]); return; }
     const ids: string[] = [];
-    snap.forEach((child) => ids.push(child.val().followingId ?? child.key!));
+    snap.forEach((child) => {
+      const id = child.val()?.followingId ?? child.key;
+      if (typeof id === "string") ids.push(id);
+    });
     callback(ids);
   });
 }

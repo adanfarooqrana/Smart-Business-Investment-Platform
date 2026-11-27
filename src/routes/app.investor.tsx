@@ -1,4 +1,5 @@
-import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { InvestorMarketplace, MarketplacePortfolio, available, useMarketCatalog } from "@/components/investor/InvestorMarketplace";
+import { createFileRoute, redirect, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAppState } from "@/hooks/useAppState";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -14,7 +15,6 @@ import {
 import { usePitchedIdeas } from "@/hooks/usePitchedIdeas";
 import { useInvestorSession } from "@/hooks/useInvestorSession";
 import { useAuth } from "@/contexts/AuthContext";
-import { WeeklyFollowUpPanel } from "@/components/investor/WeeklyFollowUpPanel";
 import { InvestorDiscoverHeader } from "@/components/investor/InvestorDiscoverHeader";
 import { InvestorPaymentDesk } from "@/components/investor/InvestorPaymentDesk";
 import { InvestorPortfolio } from "@/components/investor/InvestorPortfolio";
@@ -22,13 +22,28 @@ import { InvestorChatsTab } from "@/components/investor/InvestorChatsTab";
 import { ReviewSubmitWidget } from "@/components/ReviewSubmitWidget";
 import { InvestorDashboardErrorBoundary } from "@/components/investor/InvestorDashboardErrorBoundary";
 import { KycPendingGate } from "@/components/kyc/KycPendingGate";
-import { streamUserKycStatus } from "@/services/adminKycService";
+import { useKycApprovalGate } from "@/hooks/useKycApprovalGate";
+import { auth } from "@/firebase";
+import { getInvestorKycStatus } from "@/components/investor/InvestorKycVerification";
 import { blockCommunityMemberFromWorkspace } from "@/lib/routeGuards";
-import { KYC_BYPASS_FOR_TESTING } from "@/lib/kycBypass";
 
 export const Route = createFileRoute("/app/investor")({
-  beforeLoad: () => {
+  validateSearch: (search: Record<string, unknown>) => ({
+    view: search.view === "founders" ? "founders" as const : undefined,
+    founder: search.view === "founders" && typeof search.founder === "string" ? search.founder : undefined,
+  }),
+  beforeLoad: async () => {
     blockCommunityMemberFromWorkspace();
+    await auth.authStateReady();
+    const user = auth.currentUser;
+    if (!user) throw redirect({ to: "/app/login" });
+    if (!user.emailVerified) {
+      throw redirect({ to: "/app/register", search: { resume: "investor" } });
+    }
+    const kyc = await getInvestorKycStatus();
+    if (kyc.stage !== 3 || !kyc.livenessPassed) {
+      throw redirect({ to: "/app/register", search: { resume: "investor" } });
+    }
   },
   component: InvestorPage,
 });
@@ -60,31 +75,22 @@ function InvestorDashboard() {
   const [feedSearchQuery, setFeedSearchQuery] = useState("");
   const [headerSunBlink, setHeaderSunBlink] = useState(false);
   const headerBlinkTimer = useRef<number | null>(null);
-  const [kycPending, setKycPending] = useState(false);
-  const [kycChecked, setKycChecked] = useState(false);
 
   const investorUid = String(currentUser?.uid || "").trim();
+  const { ready: kycReady, blocked: kycBlocked } = useKycApprovalGate(investorUid);
 
-  useEffect(() => {
-    if (KYC_BYPASS_FOR_TESTING) {
-      setKycPending(false);
-      setKycChecked(true);
-      return;
-    }
-    if (!investorUid) {
-      setKycChecked(true);
-      setKycPending(false);
-      return;
-    }
-    return streamUserKycStatus(investorUid, (r) => {
-      setKycPending(r?.kycStatus === "pending" || r?.kycStatus === "rejected");
-      setKycChecked(true);
-    });
-  }, [investorUid]);
-
-  const { pitchedIdeas, loading: pitchesLoading, liveCount } = usePitchedIdeas();
-  const allStartupIdeas = pitchedIdeas;
+  const { pitchedIdeas, liveCount } = usePitchedIdeas();
+  const { view, founder } = Route.useSearch();
+  const { catalog, error: catalogError, refresh: refreshCatalog } = useMarketCatalog(investorUid);
+  const funded = new Set(catalog.products.filter((item) => !item.demo && item.totalProductChunks &&
+    (item.soldChunks ?? 0) >= item.totalProductChunks).map((item) => item.founderId + "/" + item.id));
+  const allStartupIdeas = (Array.isArray(pitchedIdeas) ? pitchedIdeas : []).filter((item) => typeof item?.id === "string" && !funded.has((item.founderId ?? item.entrepreneurUid) + "/" + item.id));
   const filteredStartupIdeas = filterStartupIdeas(allStartupIdeas, feedSearchQuery);
+  const query = feedSearchQuery.trim().toLowerCase();
+  const chunkIdeas = catalog.products.filter((item) => item.demo && available(item) > 0 &&
+    (!query || [item.title, item.category, item.description,
+      catalog.founders.find((entry) => entry.id === item.founderId)?.founderName]
+      .some((text) => typeof text === "string" && text.toLowerCase().includes(query))));
 
   useEffect(() => {
     if (!sessionReady || authLoading) return;
@@ -92,6 +98,8 @@ function InvestorDashboard() {
     if (currentUser && (userData?.role === "investor" || role === "investor")) return;
     navigate({ to: "/app/login" });
   }, [sessionReady, authLoading, isInvestorRegistered, currentUser, userData?.role, role, navigate]);
+
+  useEffect(() => { if (view === "founders") setTab("discover"); }, [view]);
 
   const triggerHeaderSunBlink = () => {
     setHeaderSunBlink(true);
@@ -108,7 +116,7 @@ function InvestorDashboard() {
     );
   }
 
-  if (!kycChecked) {
+  if (!kycReady) {
     return (
       <div className="flex h-[80vh] flex-col items-center justify-center gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-accent" />
@@ -117,16 +125,14 @@ function InvestorDashboard() {
     );
   }
 
-  if (kycPending && investorUid) {
+  if (kycBlocked && investorUid) {
     return (
-      <div className="flex min-h-[80vh] items-center justify-center px-6">
-        <KycPendingGate
-          uid={investorUid}
-          role="investor"
-          email={investor?.email || currentUser?.email || ""}
-          approvedPath="/app/investor"
-        />
-      </div>
+      <KycPendingGate
+        uid={investorUid}
+        role="investor"
+        email={investor?.email || currentUser?.email || ""}
+        approvedPath="/app/investor"
+      />
     );
   }
 
@@ -134,7 +140,7 @@ function InvestorDashboard() {
     <div className="mx-auto max-w-6xl px-6 py-8">
       {tab === "discover" ? (
         <InvestorDiscoverHeader
-          investorName={investor.name}
+          investorName={investor?.name || "Investor"}
           blink={headerSunBlink}
           ideaCount={filteredStartupIdeas.length}
         />
@@ -142,7 +148,7 @@ function InvestorDashboard() {
         <div className="mb-8 border-b border-border/40 pb-6">
           <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-foreground/10 bg-foreground/5 px-3 py-1 text-xs font-semibold text-foreground">
             <Briefcase className="h-3.5 w-3.5" />
-            <span>AI Capital Desk &bull; {investor.entityType || "Firm"}</span>
+            <span>AI Capital Desk &bull; {investor?.entityType || "Firm"}</span>
           </div>
           <h1 className="font-display text-3xl font-extrabold tracking-tight">Investor Workspace</h1>
         </div>
@@ -160,7 +166,10 @@ function InvestorDashboard() {
           <button
             key={id}
             type="button"
-            onClick={() => setTab(id)}
+            onClick={() => {
+              setTab(id);
+              if (view === "founders") void navigate({ to: "/app/investor", search: {} });
+            }}
             className={`rounded-full px-4 py-2 text-xs font-semibold transition-all ${
               tab === id ? "bg-foreground text-background shadow-soft" : "text-muted-foreground hover:bg-white/80"
             }`}
@@ -172,24 +181,29 @@ function InvestorDashboard() {
         ))}
       </div>
 
-      {tab === "discover" && (
-        <>
-          <WeeklyFollowUpPanel />
+      {tab === "discover" && (view === "founders" ? (
+        <InvestorMarketplace key={founder ?? ""} catalog={catalog} error={catalogError}
+          refresh={refreshCatalog} initialFounder={founder} />
+      ) : (
+        <InvestorDashboardErrorBoundary>
           <InvestorIdeasFeed
-            investor={investor}
-            searchQuery={feedSearchQuery}
-            onSearchChange={setFeedSearchQuery}
-            onSearchInteract={triggerHeaderSunBlink}
-            ideas={filteredStartupIdeas}
-            liveFounderCount={liveCount}
-            loadingLive={pitchesLoading}
+          investor={investor}
+          searchQuery={feedSearchQuery}
+          onSearchChange={setFeedSearchQuery}
+          onSearchInteract={triggerHeaderSunBlink}
+          ideas={filteredStartupIdeas}
+          liveFounderCount={liveCount}
+          chunkIdeas={chunkIdeas}
+          catalogError={catalogError}
+          retryCatalog={refreshCatalog}
           />
-        </>
-      )}
+        </InvestorDashboardErrorBoundary>
+      ))}
 
       {tab === "portfolio" && (
         <div className="space-y-6">
           <InvestorPortfolio />
+          <MarketplacePortfolio />
           <ReviewSubmitWidget roleLabel="Investor" className="mt-6" />
         </div>
       )}

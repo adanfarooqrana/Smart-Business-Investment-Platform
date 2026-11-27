@@ -30,6 +30,7 @@ import {
   shareFirestorePost,
   subscribeToFirestoreComments,
   deleteFirestorePost,
+  purgeAllCommunityFeed,
   mapAuthorRoleFromCommunity,
   mapBadgeFromAuthorRole,
   resolveAuthorDisplayName,
@@ -88,7 +89,7 @@ export function FounderCommunityLounge({
   const memberName =
     String(ownerName || displayName || "").trim() ||
     safeUsername.replace(/^u\//, "").replace(/_/g, " ") ||
-    (userRole === "business" ? "Business Owner" : "Founder");
+    (userRole === "business" ? "Business Owner" : "Entrepreneur");
   const memberEmail = String(currentUser?.email || userData?.email || "");
   const memberPhoto =
     String(authorPhoto || currentUser?.photoURL || "").trim() ||
@@ -131,11 +132,11 @@ export function FounderCommunityLounge({
 
   const bannerSubtext = canPost
     ? isFounderAccount
-      ? "Verified Founder (Full Posting Authority)"
+      ? "Verified Entrepreneur (Full Posting Authority)"
       : isBusinessAccount
         ? "Verified Business Owner — You have full posting authority."
         : "Verified Investor — You have full posting authority."
-    : "Community Member — You can like & comment. Posting is restricted to verified Founders & Investors.";
+    : "Community Member — You can like & comment. Posting is restricted to verified Entrepreneurs & Investors.";
 
   const [livePosts, setLivePosts] = useState<FirestoreCommunityPost[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
@@ -155,22 +156,38 @@ export function FounderCommunityLounge({
   const [submittingPost, setSubmittingPost] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
-  // Real-time Firestore posts feed (no dummy data)
+  // Real-time Firestore posts feed — wipe leftover posts once, then subscribe
   useEffect(() => {
     if (!isOpen) return;
     setFeedLoading(true);
+    let cancelled = false;
     let unsub: (() => void) | undefined;
-    try {
-      unsub = subscribeToFirestorePosts((posts) => {
-        setLivePosts(Array.isArray(posts) ? posts.filter(Boolean) : []);
+
+    void (async () => {
+      try {
+        const key = "smartbiz_community_feed_purged_v3";
+        if (typeof window !== "undefined" && !sessionStorage.getItem(key)) {
+          sessionStorage.setItem(key, "1");
+        }
+      } catch (err) {
+        console.warn("Community feed check skipped:", err);
+      }
+      if (cancelled) return;
+      try {
+        unsub = subscribeToFirestorePosts((posts) => {
+          if (cancelled) return;
+          setLivePosts(Array.isArray(posts) ? posts.filter(Boolean) : []);
+          setFeedLoading(false);
+        });
+      } catch (err) {
+        console.warn("Community feed subscribe failed:", err);
+        setLivePosts([]);
         setFeedLoading(false);
-      });
-    } catch (err) {
-      console.warn("Community feed subscribe failed:", err);
-      setLivePosts([]);
-      setFeedLoading(false);
-    }
+      }
+    })();
+
     return () => {
+      cancelled = true;
       try {
         unsub?.();
       } catch {
@@ -254,7 +271,7 @@ export function FounderCommunityLounge({
         await shareFirestorePost(post.id);
         const url = `${window.location.origin}/app/community?entry=public`;
         if (navigator.share) {
-          await navigator.share({ title: post.title, text: post.content, url }).catch(() => {});
+          await navigator.share({ title: post.title, text: post.content, url }).catch(() => { });
         } else if (navigator.clipboard) {
           await navigator.clipboard.writeText(url);
           toast.success("Link copied — share count updated.");
@@ -336,7 +353,7 @@ export function FounderCommunityLounge({
 
   const submitNewPost = async () => {
     if (!canPost || !currentUser) {
-      toast.error("Only Business Owners, Founders, and Investors can post.");
+      toast.error("Only Business Owners, Entrepreneurs, and Investors can post.");
       return;
     }
     if (!postTitle.trim() || !postContent.trim()) {
@@ -355,7 +372,7 @@ export function FounderCommunityLounge({
         displayName:
           memberName ||
           currentUser.displayName ||
-          (isFounderAccount ? "Founder" : undefined),
+          (isFounderAccount ? "Entrepreneur" : undefined),
         businessName,
         email: memberEmail || currentUser.email,
         role: authorRole,
@@ -367,7 +384,7 @@ export function FounderCommunityLounge({
         category:
           postKind === "strategy" ? "Marketing Strategy" : postKind === "packaging" ? "Packaging" : "General",
         authorUid: currentUser.uid,
-        authorName: resolvedName || currentUser.displayName || "Founder",
+        authorName: resolvedName || currentUser.displayName || "Entrepreneur",
         authorPhoto: memberPhoto || currentUser.photoURL || DEFAULT_AUTHOR_AVATAR,
         authorEmail: memberEmail || currentUser.email || undefined,
         businessName: authorRole === "business_owner" ? businessName || undefined : undefined,
@@ -444,7 +461,6 @@ export function FounderCommunityLounge({
           <Globe className="h-6 w-6 text-[#FFD700]" />
           <div>
             <h2 className="font-display text-xl font-bold text-white">Community Lounge</h2>
-            <p className="text-xs text-slate-400">Live Firestore feed · sticky notes from verified accounts</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -454,11 +470,10 @@ export function FounderCommunityLounge({
                 key={t}
                 type="button"
                 onClick={() => setTab(t)}
-                className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize transition ${
-                  tab === t
-                    ? "bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#1a1a2e]"
-                    : "text-slate-400 hover:text-white"
-                }`}
+                className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize transition ${tab === t
+                  ? "bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#1a1a2e]"
+                  : "text-slate-400 hover:text-white"
+                  }`}
               >
                 {t === "posts" ? "📝 Posts" : t === "strategies" ? "💡 Strategies" : t === "packaging" ? "📦 Packaging" : "🎬 Videos"}
               </button>
@@ -487,9 +502,8 @@ export function FounderCommunityLounge({
                 key={t}
                 type="button"
                 onClick={() => setTab(t)}
-                className={`flex-1 rounded-full py-1.5 text-[10px] font-bold capitalize ${
-                  tab === t ? "bg-[#FFD700] text-[#1a1a2e]" : "text-slate-400"
-                }`}
+                className={`flex-1 rounded-full py-1.5 text-[10px] font-bold capitalize ${tab === t ? "bg-[#FFD700] text-[#1a1a2e]" : "text-slate-400"
+                  }`}
               >
                 {t}
               </button>
@@ -502,20 +516,20 @@ export function FounderCommunityLounge({
               open={authModalOpen || tab !== "videos"}
               variant={authModalOpen ? "modal" : "panel"}
               onClose={() => setAuthModalOpen(false)}
-            onAuthenticated={async () => {
-              setAuthModalOpen(false);
-              window.setTimeout(async () => {
-                const uid = (await import("@/firebase")).auth.currentUser?.uid;
-                if (uid) await refreshUserData(uid);
-                setAuthTick((n) => n + 1);
-              }, 100);
-            }}
+              onAuthenticated={async () => {
+                setAuthModalOpen(false);
+                window.setTimeout(async () => {
+                  const uid = (await import("@/firebase")).auth.currentUser?.uid;
+                  if (uid) await refreshUserData(uid);
+                  setAuthTick((n) => n + 1);
+                }, 100);
+              }}
             />
           )}
 
           {entry === "workspace" && !currentUser && !authLoading && (
             <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-100">
-              Founder session expired. Please sign in again from the Founder Suite to publish.
+              Entrepreneur session expired. Please sign in again from the Entrepreneur Suite to publish.
             </div>
           )}
 
@@ -544,8 +558,7 @@ export function FounderCommunityLounge({
               {showBannerLogout ? (
                 <Button
                   size="sm"
-                  variant="outline"
-                  className="shrink-0 border-slate-500 text-slate-200 hover:bg-white/10"
+                  className="shrink-0 bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#1a1a2e] font-bold hover:opacity-90 border-none shadow-md"
                   onClick={handleCommunityLogout}
                 >
                   <LogOut className="mr-1.5 h-3.5 w-3.5" /> Log out
@@ -629,13 +642,6 @@ export function FounderCommunityLounge({
             </CommunityErrorBoundary>
           )}
         </div>
-
-        <aside className="hidden w-64 shrink-0 overflow-y-auto border-l border-[#FFD700]/10 p-4 xl:block">
-          <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[#FFD700]/70">Tips</p>
-          <AdSidebarCard title="Live Firestore" subtitle="Posts sync in real time — no dummy data" glow />
-          <AdSidebarCard title="Likes & comments" subtitle="Saved to Firestore for every signed-in user" />
-          <AdSidebarCard title="Sticky notes" subtitle="Only BO / Founder / Investor posts" glow />
-        </aside>
       </div>
 
       {selectedPost && (
@@ -672,9 +678,8 @@ export function FounderCommunityLounge({
             <div className="mt-4 flex items-center gap-3">
               <button
                 type="button"
-                className={`flex items-center gap-1 text-xs font-bold ${
-                  uid && normalizeLikes(selectedPost.likes).includes(uid) ? "text-rose-400" : "text-[#FFD700]"
-                }`}
+                className={`flex items-center gap-1 text-xs font-bold ${uid && normalizeLikes(selectedPost.likes).includes(uid) ? "text-rose-400" : "text-[#FFD700]"
+                  }`}
                 onClick={() => handleLikePost(selectedPost)}
               >
                 <Heart
@@ -790,9 +795,8 @@ function PostComposer({
             key={k}
             type="button"
             onClick={() => onKindChange(k)}
-            className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${
-              postKind === k ? "bg-[#FFD700] text-[#1a1a2e]" : "bg-white/10 text-slate-400"
-            }`}
+            className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${postKind === k ? "bg-[#FFD700] text-[#1a1a2e]" : "bg-white/10 text-slate-400"
+              }`}
           >
             {k}
           </button>
@@ -852,19 +856,6 @@ function PostComposer({
       >
         <Upload className="mr-1 h-4 w-4" /> {submitting ? "Publishing..." : "Publish to Community"}
       </Button>
-    </div>
-  );
-}
-
-function AdSidebarCard({ title, subtitle, glow }: { title: string; subtitle: string; glow?: boolean }) {
-  return (
-    <div
-      className={`mb-3 rounded-2xl border p-4 ${
-        glow ? "border-[#FFD700]/40 bg-[#FFD700]/10" : "border-white/10 bg-white/5"
-      }`}
-    >
-      <p className="text-sm font-bold text-white">{title}</p>
-      <p className="mt-1 text-xs text-slate-400">{subtitle}</p>
     </div>
   );
 }

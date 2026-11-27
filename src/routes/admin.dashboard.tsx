@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AdminKycDashboard } from "@/components/admin/AdminKycDashboard";
 import { isAdminSessionValid } from "@/services/adminKycService";
 
@@ -10,15 +10,16 @@ export const Route = createFileRoute("/admin/dashboard")({
 function AdminDashboardPage() {
   const navigate = useNavigate();
 
+  const [allowed, setAllowed] = useState(false);
   useEffect(() => {
-    if (!isAdminSessionValid()) {
-      navigate({ to: "/admin/login" });
-    }
+    let active = true;
+    void isAdminSessionValid().then((valid) => {
+      if (!active) return;
+      if (valid) setAllowed(true);
+      else navigate({ to: "/admin/login" });
+    });
+    return () => { active = false; };
   }, [navigate]);
 
-  if (!isAdminSessionValid()) {
-    return null;
-  }
-
-  return <AdminKycDashboard />;
+  return allowed ? <AdminKycDashboard /> : null;
 }

@@ -117,7 +117,7 @@ function generateStage2Response(
 
   if (lower.includes("confidence") || lower.includes("founder") && lower.includes("background")) {
     return {
-      reply: `Founder Confidence Score: ${confidence}/100 for ${idea.founderName}. Background: ${s2.founderBackground.education}, ${s2.founderBackground.yearsExperience} years experience, ${s2.founderBackground.priorVentures}. SmartBiz verification: ${s2.founderBackground.verificationScore}/100. ${confidence >= 85 ? "Strong founder-market fit — above average for seed-stage deals in Pakistan." : confidence >= 70 ? "Solid profile — recommend validating operational proofs in the gallery." : "Moderate confidence — dig deeper into unit economics before committing."}`,
+      reply: `Founder Confidence Score: ${confidence}/100 for ${idea.founderName}. Background: ${s2.founderBackground.education}, ${s2.founderBackground.yearsExperience} years experience, ${s2.founderBackground.priorVentures}. InvestBiz verification: ${s2.founderBackground.verificationScore}/100. ${confidence >= 85 ? "Strong founder-market fit — above average for seed-stage deals in Pakistan." : confidence >= 70 ? "Solid profile — recommend validating operational proofs in the gallery." : "Moderate confidence — dig deeper into unit economics before committing."}`,
       detectedTerm: "Founder Confidence",
       shouldFlagForFounder: false,
     };
@@ -151,7 +151,7 @@ function generateStage2Response(
 
   if (lower.includes("market") || lower.includes("demand") || lower.includes("growth")) {
     return {
-      reply: `Local market analysis (${s2.marketInsight.location}): ${s2.marketInsight.demandGrowthYoY}% YoY demand growth. ${s2.marketInsight.marketSummary} Viability: ${s2.marketInsight.viabilityRating}. Combined with founder score ${confidence}/100, this ranks ${s2.marketInsight.viabilityRating === "High" ? "above" : "at"} median for ${idea.industry} deals on SmartBiz.`,
+      reply: `Local market analysis (${s2.marketInsight.location}): ${s2.marketInsight.demandGrowthYoY}% YoY demand growth. ${s2.marketInsight.marketSummary} Viability: ${s2.marketInsight.viabilityRating}. Combined with founder score ${confidence}/100, this ranks ${s2.marketInsight.viabilityRating === "High" ? "above" : "at"} median for ${idea.industry} deals on InvestBiz.`,
       detectedTerm: "Market Viability",
       shouldFlagForFounder: false,
     };

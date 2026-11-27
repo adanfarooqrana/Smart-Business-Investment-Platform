@@ -51,7 +51,7 @@ export function EntrepreneurProfileCard({
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-[#FFA500]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#FFA500]">
-              Entrepreneur / Founder
+              Entrepreneur
             </span>
             {isVerified && (
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">

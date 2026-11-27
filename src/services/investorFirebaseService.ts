@@ -14,6 +14,9 @@ import {
   onValue,
   off,
   push,
+  query,
+  orderByChild,
+  equalTo,
 } from "firebase/database";
 
 // ─── Path helpers ────────────────────────────────────────────────────────────
@@ -961,7 +964,7 @@ export function streamInvestorChatThreads(
     return () => undefined;
   }
 
-  const chatsRef = ref(database, "chats");
+  const chatsRef = query(ref(database, "chats"), orderByChild("investorId"), equalTo(rawInv));
   let active = true;
 
   try {

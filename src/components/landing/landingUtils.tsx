@@ -75,7 +75,7 @@ export function useCharTypewriter(text: string, speed = 28, active = true) {
 }
 
 const REVIEW_KEYWORDS = [
-  "SmartBiz",
+  "InvestBiz",
   "AI",
   "Sales",
   "investors",

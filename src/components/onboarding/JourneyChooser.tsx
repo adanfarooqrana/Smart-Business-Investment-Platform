@@ -1,23 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import {
   Briefcase,
   Boxes,
   TrendingUp,
-  Sparkles,
   LogIn,
   RotateCw,
   ArrowRight,
-  Star,
-  Package,
-  Coins,
   Lightbulb,
-  BarChart3,
-  Users,
   Loader2,
 } from "lucide-react";
 import { usePlatformStats } from "@/hooks/usePlatformStats";
 import { ecosystemShare, statFill, type PlatformStats } from "@/services/platformStatsService";
 import { OrbitLaunchTransition } from "@/components/ui/OrbitLaunchTransition";
+import journeyStyles from "./JourneyChooser.css?inline";
+
 export type JourneyRole = "business" | "wholesaler" | "investor" | "entrepreneur";
 
 type RoleConfig = {
@@ -145,259 +141,158 @@ function buildRolesFromStats(stats: PlatformStats): RoleConfig[] {
     stats: statsByRole[base.id],
   }));
 }
-const PERK_ICONS = [Star, Package, Coins];
 
-function useTypewriter(text: string, speed = 75) {
-  const [out, setOut] = useState("");
-  useEffect(() => {
-    setOut("");
-    let i = 0;
-    const t = window.setInterval(() => {
-      i += 1;
-      setOut(text.slice(0, i));
-      if (i >= text.length) window.clearInterval(t);
-    }, speed);
-    return () => window.clearInterval(t);
-  }, [text, speed]);
-  return out;
-}
+const ROLE_LABELS: Record<JourneyRole, string> = {
+  business: "Business Owner",
+  wholesaler: "Wholesaler",
+  investor: "Investor",
+  entrepreneur: "Entrepreneur",
+};
 
-function polar(cx: number, cy: number, r: number, deg: number) {
-  const rad = ((deg - 90) * Math.PI) / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-}
-
-function pieSlice(cx: number, cy: number, r: number, startDeg: number, endDeg: number) {
-  const start = polar(cx, cy, r, endDeg);
-  const end = polar(cx, cy, r, startDeg);
-  const large = endDeg - startDeg <= 180 ? 0 : 1;
-  return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${large} 0 ${end.x} ${end.y} Z`;
-}
-
-function EcosystemPieChart({ activeIndex, roles }: { activeIndex: number; roles: RoleConfig[] }) {
-  const cx = 100;
-  const cy = 100;
-  const r = 78;
-  const sliceDeg = 360 / roles.length;
-  const rotation = -activeIndex * sliceDeg;
-  const active = roles[activeIndex];
+function JourneyAtmosphere() {
   return (
-    <div className="relative mx-auto w-full max-w-[240px]">
-      <div
-        className="journey-pie-glow pointer-events-none absolute inset-0 rounded-full blur-2xl transition-all duration-700"
-        style={{ background: `radial-gradient(circle, ${active.color}55 0%, transparent 70%)` }}
-      />
-      <svg viewBox="0 0 200 200" className="relative w-full drop-shadow-lg">
-        <g
+    <div className="journey-atmosphere" aria-hidden="true">
+      <div className="journey-sun-atmosphere journey-dawn" />
+      <div className="journey-sun-rays-wrap journey-dawn-rays" />
+      <span className="journey-ball journey-ball-1" />
+      <span className="journey-ball journey-ball-2" />
+      <span className="journey-ball journey-ball-3" />
+      {Array.from({ length: 12 }, (_, index) => (
+        <span
+          key={index}
+          className="journey-paisa journey-ember"
           style={{
-            transform: `rotate(${rotation}deg)`,
-            transformOrigin: "100px 100px",
-            transition: "transform 0.85s cubic-bezier(0.22, 1, 0.36, 1)",
+            left: (index * 31 + 4) % 97 + "%",
+            animationDelay: -(index * 1.3) + "s",
+            animationDuration: (9 + index % 5) + "s",
           }}
         >
-          {roles.map((role, i) => {
-            const start = i * sliceDeg;
-            const end = (i + 1) * sliceDeg;
-            const isActive = i === activeIndex;
-            return (
-              <path
-                key={role.id}
-                d={pieSlice(cx, cy, r, start, end)}
-                fill={role.pieColor}
-                opacity={isActive ? 1 : 0.55}
-                className={isActive ? "journey-pie-slice-active" : ""}
-                style={
-                  isActive
-                    ? { filter: `drop-shadow(0 0 12px ${role.color}) drop-shadow(0 0 24px ${role.color}88)` }
-                    : undefined
-                }
-              />
-            );
-          })}
+          {index % 3 === 0 ? "PKR" : "\u20a8"}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function JourneyCompanion({ role }: { role: JourneyRole }) {
+  return (
+    <svg key={role} className="journey-illustration" viewBox="0 0 360 280" aria-hidden="true">
+      <defs>
+        <linearGradient id="journey-ink" x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#694066" /><stop offset="1" stopColor="#302036" />
+        </linearGradient>
+        <linearGradient id="journey-gold" x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#ffe9a8" /><stop offset="1" stopColor="#e67e22" />
+        </linearGradient>
+        <linearGradient id="journey-skin" x1="0" y1="0" x2=".86" y2="1">
+          <stop stopColor="#ffd2a1" /><stop offset=".55" stopColor="#e89b73" /><stop offset="1" stopColor="#b15f4d" />
+        </linearGradient>
+        <radialGradient id="journey-light">
+          <stop stopColor="#fff9db" /><stop offset="1" stopColor="#ffd094" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      <circle cx="174" cy="140" r="126" fill="url(#journey-light)" />
+      <circle cx="174" cy="140" r="94" fill="none" stroke="#f2b472" strokeDasharray="2 7" />
+      <path d="M36 215H323" stroke="#bd641a" strokeOpacity=".34" />
+      <ellipse cx="177" cy="223" rx="119" ry="13" fill="#ae5527" opacity=".10" />
+
+      <g className="journey-person">
+        <path d="M101 214v-25c0-32 21-50 47-55h24c31 6 49 25 49 55v25z" fill="url(#journey-ink)" />
+        <path d="M144 125v14c0 13 30 15 33 0v-17z" fill="#bc6b50" />
+        <g className="journey-face">
+          <path d="M126 89c0-24 15-39 37-39 26 0 40 18 39 46l-9 24-65-4z" fill="#332137" />
+        <path d="M138 91c15 0 30-7 42-21l10 13v21c0 24-14 38-29 38s-28-14-28-37c-10 2-13-14-5-16z" fill="url(#journey-skin)" />
+          <path d="M133 81q16-32 46-24m-44 16q22-18 46-12" fill="none" stroke="#94627a" strokeOpacity=".51" strokeWidth="1.8" strokeLinecap="round" />
+          <path d="M145 97q5-3 11-1m12 0q6-3 11 0m-15 7-2 10 4 1m-8 6c3 3 7 3 10 0" fill="none" stroke="#7b4346" strokeWidth="1.5" strokeLinecap="round" />
+          <g className="journey-eyes" fill="#422532">
+            <ellipse cx="152" cy="103" rx="2.1" ry="2.6" /><ellipse cx="174" cy="103" rx="2.1" ry="2.6" />
+          </g>
         </g>
-        <circle cx={cx} cy={cy} r={42} fill="white" fillOpacity={0.95} />
-        <text x={cx} y={cy - 6} textAnchor="middle" className="fill-slate-900 text-[13px] font-bold" style={{ fontSize: 13 }}>
-          {active.ecosystemPct}%
-        </text>
-        <text x={cx} y={cy + 12} textAnchor="middle" className="fill-slate-500" style={{ fontSize: 9 }}>
-          ecosystem share
-        </text>
-        <polygon points="100,14 94,28 106,28" fill={active.color} className="journey-pie-pointer" />
-      </svg>
-      <div className="mt-3 flex flex-wrap justify-center gap-2">
-        {roles.map((role, i) => (          <span
-            key={role.id}
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold transition-all duration-500 ${
-              i === activeIndex ? "scale-105 shadow-md" : "opacity-60"
-            }`}
-            style={{
-              background: i === activeIndex ? `${role.color}22` : "#f1f5f9",
-              color: i === activeIndex ? role.color : "#64748b",
-              boxShadow: i === activeIndex ? `0 0 14px ${role.color}66` : undefined,
-            }}
-          >
-            <span className="h-2 w-2 rounded-full" style={{ background: role.pieColor }} />
-            {role.label.split(" ")[0]}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
+        <path d="M111 212v-20c0-22 10-36 27-43" fill="none" stroke="#ad7490" strokeOpacity=".55" strokeWidth="2" />
+      </g>
 
-function RoleAnalyticsPanel({
-  role,
-  animateKey,
-  roles,
-}: {
-  role: RoleConfig;
-  animateKey: number;
-  roles: RoleConfig[];
-}) {  return (
-    <div
-      key={`${role.id}-${animateKey}`}
-      className="journey-analytics-panel rounded-3xl border border-white/60 bg-white/80 p-5 shadow-xl backdrop-blur-xl animate-in fade-in slide-in-from-right-4 duration-500"
-    >
-      <div className="mb-4 flex items-center gap-2">
-        <div
-          className="flex h-9 w-9 items-center justify-center rounded-xl text-white shadow-lg"
-          style={{ background: `linear-gradient(135deg, ${role.color}, ${role.pieColor})` }}
-        >
-          <BarChart3 className="h-4 w-4" />
-        </div>
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Live platform data</p>          <h3 className="font-display text-sm font-bold text-slate-900">{role.label} metrics</h3>
-        </div>
-      </div>
+      {role === "investor" && (
+        <>
+          <g className="journey-prop">
+            <rect x="222" y="46" width="91" height="67" rx="14" fill="#fffbeb" stroke="#efb974" />
+            <path d="M238 98h59m-53-4V82m13 12V77m13 17V69m13 25V61" stroke="#e3984a" strokeWidth="3.5" strokeLinecap="round" opacity=".5" />
+            <path d="m239 83 13-10 11 3 18-15m-8 0h8v8" fill="none" stroke="#a64d17" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          </g>
+          <g className="journey-prop journey-prop-delayed" fill="url(#journey-gold)" stroke="#b86219">
+            <circle cx="73" cy="110" r="17" /><circle cx="73" cy="110" r="11" fill="none" />
+            <circle cx="279" cy="140" r="11" /><path d="M73 105v10m206 21v8" strokeWidth="2" />
+          </g>
+          <path className="journey-gesture journey-type" d="M119 178q6 25 37 23h26" fill="none" stroke="url(#journey-skin)" strokeWidth="13" strokeLinecap="round" />
+          <path className="journey-gesture journey-type journey-type-right" d="M200 173q-2 11-16 21h-11" fill="none" stroke="url(#journey-skin)" strokeWidth="12" strokeLinecap="round" />
+          <rect x="159" y="159" width="83" height="52" rx="7" fill="#ffcc7e" className="journey-glowing-prop" />
+          <rect x="164" y="164" width="73" height="42" rx="5" fill="#4e324b" />
+          <path d="m185 191 9-9 8 5 13-13" fill="none" stroke="#ffce7b" strokeWidth="2.5" strokeLinecap="round" />
+          <path className="journey-laptop-glint" d="M174 170h55m-37 30h15" fill="none" stroke="#ffc979" strokeWidth="1.5" strokeLinecap="round" />
+          <path d="M144 209h104v6H144z" fill="#a55f48" />
+        </>
+      )}
 
-      <EcosystemPieChart activeIndex={roles.findIndex((r) => r.id === role.id)} roles={roles} />
-      <div className="mt-5 space-y-3">
-        {role.stats.map((stat, idx) => (
-          <div key={stat.label}>
-            <div className="mb-1 flex items-center justify-between text-[10px]">
-              <span className="font-medium text-slate-600">{stat.label}</span>
-              <span className="font-bold tabular-nums text-slate-900">{stat.value.toLocaleString()}</span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-              <div
-                className="journey-bar-fill h-full rounded-full"
-                style={{
-                  ["--bar-fill" as string]: `${stat.fill}%`,
-                  ["--bar-color" as string]: role.color,
-                  animationDelay: `${idx * 0.12}s`,
-                }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
+      {role === "wholesaler" && (
+        <>
+          <g className="journey-prop">
+            <circle cx="255" cy="73" r="19" fill="#fff7df" fillOpacity=".85" stroke="#aa591f" strokeWidth="4" />
+            <path d="m269 87 16 16" stroke="#aa591f" strokeWidth="7" strokeLinecap="round" />
+          </g>
+          <g className="journey-prop journey-prop-delayed">
+            <rect x="57" y="94" width="51" height="32" rx="9" fill="#fffbeb" stroke="#db9a5a" />
+            <path d="M68 110l4 4 6-8m6 2h13m-13 6h10" fill="none" stroke="#92502e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </g>
+          <path d="m183 171 34-17 40 15v42l-38 12-36-12z" fill="#dc9358" stroke="#ad5830" />
+          <path d="m183 171 36 13 38-15-40-15z" fill="#f9c88b" stroke="#ad5830" />
+          <path d="M219 185v37m-17-59 38 14v14l-8 3v-14" fill="none" stroke="#a65e36" />
+          <path d="M251 192h40v23h-40z" fill="#eeb482" stroke="#ad5830" />
+          <path d="M266 193h9v13h-9z" fill="#ffe3a5" />
+          <path d="M117 175q19 27 66 14" fill="none" stroke="url(#journey-skin)" strokeWidth="13" strokeLinecap="round" />
+          <g className="journey-gesture journey-pack">
+            <path d="M187 162q12-3 27 9" fill="none" stroke="url(#journey-skin)" strokeWidth="13" strokeLinecap="round" />
+            <path d="M210 166l12-5 13 8-11 7z" fill="#fae5ab" stroke="#aa6030" strokeLinejoin="round" />
+            <circle cx="221" cy="167" r="3.4" fill="#ab672e" />
+          </g>
+        </>
+      )}
 
-      <div className="mt-4 flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2 text-[10px] text-slate-600">
-        <Users className="h-3.5 w-3.5 shrink-0" style={{ color: role.color }} />
-        <span>
-          <strong style={{ color: role.color }}>{role.ecosystemPct}%</strong> of SmartBiz ecosystem — synced from Firebase        </span>
-      </div>
-    </div>
-  );
-}
+      {role === "entrepreneur" && (
+        <>
+          <g className="journey-prop">
+            <g className="journey-glowing-prop">
+              <path d="M245 71a20 20 0 1 1 28 0c-4 4-4 9-4 11h-20c0-2 0-7-4-11z" fill="url(#journey-gold)" stroke="#b36a1e" strokeWidth="2" />
+              <path d="M253 86h12m-9 5h6m-3-63v-8m-23 16-6-6m53 6 6-6m-57 23h-8m63 0h8" fill="none" stroke="#bd661b" strokeWidth="2.5" strokeLinecap="round" />
+            </g>
+          </g>
+          <g className="journey-prop journey-prop-delayed">
+            <rect x="60" y="56" width="58" height="47" rx="10" fill="#fff5dd" stroke="#cc8c52" />
+            <path d="M69 63v34m9-34v34m9-34v34m9-34v34m9-34v34m-39-29h46m-46 7h46m-46 7h46m-46 7h46" stroke="#eac49c" strokeWidth=".8" />
+            <path d="M76 90l12-19 14 19zm9-7h7m26-37v10m-5-5h10" fill="none" stroke="#a25025" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </g>
+          <path className="journey-gesture journey-think" d="M206 173q-9 29-25 21l-20-51" fill="none" stroke="url(#journey-skin)" strokeWidth="13" strokeLinecap="round" />
+          <path className="journey-bulb-sparks" d="M283 107h14m-7-7v14m-53-4h8m-4-4v8" fill="none" stroke="#dd9028" strokeWidth="2" strokeLinecap="round" />
+          <path d="m184 207 43-27 45 14-46 25z" fill="#fff8e8" stroke="#b7764a" />
+          <path d="m207 206 14 4 24-16-15-4z" fill="none" stroke="#bc784a" />
+          <g className="journey-gesture journey-write">
+            <path d="M118 176q14 35 68 24" fill="none" stroke="url(#journey-skin)" strokeWidth="13" strokeLinecap="round" />
+            <path d="m181 196 21 10" stroke="#804632" strokeWidth="2.8" strokeLinecap="round" />
+          </g>
+        </>
+      )}
 
-function TrendSparkPanel({ role, animateKey }: { role: RoleConfig; animateKey: number }) {
-  const points = useMemo(() => {
-    const base = role.stats.map((s) => s.fill);
-    return [...base, base[0] * 0.95, base[1] * 1.02];
-  }, [role]);
-
-  const pathD = points
-    .map((v, i) => {
-      const x = 10 + (i / (points.length - 1)) * 180;
-      const y = 90 - (v / 100) * 70;
-      return `${i === 0 ? "M" : "L"} ${x} ${y}`;
-    })
-    .join(" ");
-
-  return (
-    <div
-      key={`trend-${role.id}-${animateKey}`}
-      className="w-full rounded-3xl border border-white/60 bg-white/75 p-5 shadow-xl backdrop-blur-xl animate-in fade-in duration-500"
-    >
-      <p className="mb-2 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">
-        Growth trajectory
-      </p>
-      <svg viewBox="0 0 200 100" className="w-full">
-        <defs>
-          <linearGradient id={`trend-grad-${role.id}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={role.color} stopOpacity="0.35" />
-            <stop offset="100%" stopColor={role.color} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={`${pathD} L 190 100 L 10 100 Z`} fill={`url(#trend-grad-${role.id})`} className="journey-trend-area" />
-        <path
-          d={pathD}
-          fill="none"
-          stroke={role.color}
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          className="journey-trend-line"
-        />
-      </svg>
-      <p className="mt-4 text-center text-xs leading-relaxed text-slate-600">{role.blurb}</p>
-      <div className="mt-3 flex justify-center gap-3">
-        {role.perks.map((p) => (
-          <span key={p} className="text-[9px] font-semibold" style={{ color: role.color }}>
-            • {p}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-const RAY_COUNT = 16;
-
-function SunlightBackdrop({
-  accent,
-  gold,
-  launching,
-}: {
-  accent: string;
-  gold: string;
-  launching: boolean;
-}) {
-  return (
-    <div className={`journey-sun-backdrop pointer-events-none absolute inset-0 -z-[25] overflow-hidden ${launching ? "journey-sun-backdrop-soft" : ""}`}>
-      <div
-        className="journey-sun-atmosphere absolute inset-0 transition-all duration-[1.2s] ease-out"
-        style={{
-          background: `
-            radial-gradient(ellipse 90% 70% at 50% -10%, ${gold}28 0%, transparent 52%),
-            radial-gradient(ellipse 60% 50% at 50% 20%, ${accent}18 0%, transparent 55%),
-            radial-gradient(ellipse 100% 80% at 50% 100%, ${accent}08 0%, transparent 50%)
-          `,
-        }}
-      />
-      <div className="journey-sun-position absolute left-1/2 top-[8%] -translate-x-1/2">
-        <div
-          className={`journey-sun-rays-wrap ${launching ? "journey-sun-rays-soft" : ""}`}
-          style={{ ["--sun-accent" as string]: accent, ["--sun-gold" as string]: gold }}
-        >
-          {Array.from({ length: RAY_COUNT }).map((_, i) => (
-            <span
-              key={i}
-              className="journey-sun-ray"
-              style={{ transform: `rotate(${i * (360 / RAY_COUNT)}deg)` }}
-            />
-          ))}
-        </div>
-        <div
-          className={`journey-sun-disc ${launching ? "journey-sun-disc-soft" : ""}`}
-          style={{
-            background: `radial-gradient(circle, #fff 0%, ${gold} 35%, ${accent} 70%, transparent 100%)`,
-            boxShadow: `0 0 30px ${gold}44, 0 0 60px ${accent}33`,
-          }}
-        />
-      </div>
-      <div className="journey-sun-shimmer absolute inset-0" />
-    </div>
+      {role === "business" && (
+        <>
+          <g className="journey-prop">
+            <rect x="222" y="60" width="69" height="56" rx="13" fill="#fff8e3" stroke="#d99b61" />
+            <path d="m234 78 4 4 7-8m-11 19 4 4 7-8m8-10h24m-24 15h17" fill="none" stroke="#a3562a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          </g>
+          <path className="journey-gesture journey-write" d="M118 175q11 28 44 23m38-21-10 21" fill="none" stroke="url(#journey-skin)" strokeWidth="13" strokeLinecap="round" />
+          <rect x="156" y="168" width="80" height="48" rx="8" fill="#f6bd7e" stroke="#a25835" />
+          <path d="M185 168v-5a4 4 0 0 1 4-4h14a4 4 0 0 1 4 4v5m-51 21h80m-45-3h11v7h-11z" fill="none" stroke="#a25835" strokeWidth="2" />
+        </>
+      )}
+    </svg>
   );
 }
 
@@ -408,258 +303,83 @@ type JourneyChooserProps = {
 
 export function JourneyChooser({ onSelect, onLogin }: JourneyChooserProps) {
   const platformStats = usePlatformStats();
-  const ROLES = useMemo(() => buildRolesFromStats(platformStats), [platformStats]);
+  const roles = useMemo(() => buildRolesFromStats(platformStats), [platformStats]);
+  const [rotationSteps, setRotationSteps] = useState(0);
+  const activeIndex = rotationSteps % roles.length;
+  const [launching, setLaunching] = useState(false);
+  const active = roles[activeIndex];
 
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [turns, setTurns] = useState(0);
-  const [launching, setLaunching] = useState<JourneyRole | null>(null);
-  const [animTick, setAnimTick] = useState(0);
-
-  const typed = useTypewriter("Choose your journey", 70);
-  const active = ROLES[activeIndex];
-
-  const slotOf = (i: number) => (i - activeIndex + ROLES.length) % ROLES.length;
-
-  const SLOT_ANGLE = ROLES.map((_, i) => -90 + (360 / ROLES.length) * i);
-  const RADIUS = 150;
-
-  const rotateClockwise = () => {
-    setActiveIndex((p) => (p + 1) % ROLES.length);
-    setTurns((t) => t + 360 / ROLES.length);
-    setAnimTick((n) => n + 1);
-  };
-
-  const focusRole = (i: number) => {
-    const steps = (i - activeIndex + ROLES.length) % ROLES.length;
-    setActiveIndex(i);
-    setTurns((t) => t + steps * (360 / ROLES.length));
-    setAnimTick((n) => n + 1);
-  };
-
-  const launch = (role: JourneyRole) => {
+  const launch = () => {
     if (launching) return;
-    setLaunching(role);
-    window.setTimeout(() => onSelect(role), 1800);
+    setLaunching(true);
+    window.setTimeout(() => onSelect(active.id), 1800);
   };
-
-  const launchRole = launching ? ROLES.find((r) => r.id === launching) : null;
-
-  const moneyTokens = useMemo(
-    () =>
-      Array.from({ length: 18 }).map((_, i) => ({
-        left: `${4 + (i * 5.5) % 92}%`,
-        delay: `${(i * 0.35) % 5}s`,
-        dur: `${2.2 + (i % 4) * 0.45}s`,
-        size: i % 3 === 0 ? "15px" : i % 3 === 1 ? "11px" : "18px",
-        glyph: i % 2 === 0 ? "₨" : "PKR",
-      })),
-    [],
-  );
-
-  const particles = useMemo(
-    () =>
-      Array.from({ length: 24 }).map((_, i) => ({
-        left: `${(i * 17) % 100}%`,
-        top: `${(i * 23) % 100}%`,
-        delay: `${(i * 0.2) % 4}s`,
-        size: 3 + (i % 4),
-      })),
-    [],
-  );
 
   return (
-    <div className="relative mx-auto flex min-h-[calc(100dvh-5rem)] w-full max-w-7xl flex-col items-center justify-center overflow-hidden px-4 py-4 md:py-6">      <SunlightBackdrop accent={active.color} gold={active.pieColor} launching={!!launching} />
-
-      {launchRole && (
-        <OrbitLaunchTransition accent={launchRole.color} label={launchRole.label} icon={launchRole.icon} />
-      )}
-
-      <div className={`relative z-10 flex w-full flex-col items-center transition-all duration-700 ${launching ? "journey-content-exit pointer-events-none" : ""}`}>
-      {/* Professional layered background */}
-      <div className="pointer-events-none absolute inset-0 -z-30">
-        <div className="journey-aurora absolute inset-0" />
-        <div className="journey-mesh absolute inset-0" />
-        <div className="journey-grid-glow absolute inset-0" />
-      </div>
-
-      <div className="pointer-events-none absolute inset-0 -z-20 overflow-hidden">
-        <div className="journey-etch absolute inset-0" />
-        {particles.map((p, i) => (
-          <span
-            key={i}
-            className="journey-particle absolute rounded-full bg-amber-400/30"
-            style={{
-              left: p.left,
-              top: p.top,
-              width: p.size,
-              height: p.size,
-              animationDelay: p.delay,
-            }}
-          />
-        ))}
-        <span className="journey-ball journey-ball-1" aria-hidden />
-        <span className="journey-ball journey-ball-2" aria-hidden />
-        <span className="journey-ball journey-ball-3" aria-hidden />
-      </div>
-
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        {moneyTokens.map((m, i) => (
-          <span
-            key={i}
-            className="journey-paisa absolute font-black text-amber-400/35"
-            style={{
-              left: m.left,
-              bottom: "-6%",
-              fontSize: m.size,
-              animationDelay: m.delay,
-              animationDuration: m.dur,
-            }}
-          >
-            {m.glyph}
-          </span>
-        ))}
-      </div>
-
-      <div
-        className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl transition-all duration-700"
-        style={{
-          background: `radial-gradient(circle, ${active.color}28 0%, transparent 65%)`,
-        }}
-      />
-
-      {/* Heading */}
-      <div className="relative mb-6 text-center lg:mb-8">
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-300/40 bg-amber-50/70 px-4 py-1.5 text-xs font-semibold text-amber-700 shadow-inner backdrop-blur-sm">
-          <Sparkles className="h-3.5 w-3.5 animate-pulse" />
-          <span>Interactive Workspace Onboarding</span>
+    <section className="journey-chooser min-h-screen w-full bg-gradient-to-br from-[#FFF7ED] via-[#FFEDD5] to-[#FED7AA]">
+      <style>{journeyStyles}</style>
+      <JourneyAtmosphere />
+      {launching && <OrbitLaunchTransition accent={active.color} label={active.label} icon={active.icon} />}
+      <div className={launching ? "journey-layout journey-content-exit pointer-events-none" : "journey-layout"}>
+        <div className="journey-heading">
+          <h1>Choose your journey</h1>
+          <p>Pick a role to preview your workspace.</p>
         </div>
-        <h1 className="font-display text-4xl font-bold tracking-tight md:text-6xl">
-          <span className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 bg-clip-text text-transparent">
-            {typed}
-          </span>
-          <span className="journey-caret ml-1 inline-block w-[3px] translate-y-1 self-stretch bg-orange-500" aria-hidden>
-            &nbsp;
-          </span>
-        </h1>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Spin the wheel and pick your role — your dashboard adapts to it.
-        </p>
-      </div>
 
-      {/* Centered selector wheel */}
-      <div className="flex w-full justify-center items-center py-4">
-        {/* Clockwise orbit selector */}
-        <div className="relative flex h-[420px] w-full max-w-[440px] items-center justify-center">
-          <div
-            className="absolute h-[330px] w-[330px] rounded-full border-2 border-dashed transition-colors duration-700"
-            style={{
-              borderColor: `${active.color}66`,
-              transform: `rotate(${turns}deg)`,
-              transition: "transform 0.7s cubic-bezier(0.22,1,0.36,1), border-color 0.7s",
-              boxShadow: `0 0 40px ${active.color}22`,
-            }}
-          />
+        <div className="journey-stage">
+          <div className="journey-selector">
+            <div className="journey-dial">
+              <div className="journey-ring" aria-hidden="true">
+                <span className="journey-orb-motion"><span className="journey-orb" /></span>
+              </div>
 
-          <div
-            className="relative z-20 flex h-[200px] w-[200px] flex-col items-center justify-center rounded-full border bg-white/90 p-5 text-center shadow-2xl backdrop-blur-md transition-shadow duration-700"
-            style={{
-              borderColor: `${active.color}44`,
-              boxShadow: `0 20px 50px ${active.color}33, 0 0 0 1px ${active.color}22`,
-            }}
-          >
-            <div
-              className={`mb-2 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-lg transition-all duration-500 ${active.glow} ${
-                launching ? "scale-125" : "journey-hub-pulse"
-              }`}
-            >
-              <active.icon className="h-7 w-7" />
+              <div className="journey-hub" aria-live="polite">
+                <span className="journey-hub-icon"><active.icon aria-hidden="true" /></span>
+                <h2>{ROLE_LABELS[active.id]}</h2>
+                <button type="button" className="journey-begin" onClick={launch} disabled={launching}>
+                  {launching ? <><Loader2 aria-hidden="true" className="animate-spin" /> Opening...</> : <>Begin <ArrowRight aria-hidden="true" /></>}
+                </button>
+              </div>
+
+              {roles.map((role, index) => (
+                <button
+                  key={role.id}
+                  type="button"
+                  className="journey-role-pill"
+                  data-role={role.id}
+                  aria-pressed={index === activeIndex}
+                  style={{ "--journey-angle": (index - rotationSteps) * 360 / roles.length + "deg" } as CSSProperties}
+                  onClick={() => setRotationSteps((steps) => steps + (index - steps % roles.length + roles.length) % roles.length)}
+                  disabled={launching}
+                >
+                  <role.icon aria-hidden="true" />
+                  <span>{ROLE_LABELS[role.id]}</span>
+                </button>
+              ))}
             </div>
-            <h3 className="font-display text-base font-bold leading-tight text-slate-900">{active.label}</h3>
-            <p className="mt-1 text-[10px] leading-snug text-slate-500">{active.tagline}</p>
             <button
               type="button"
-              disabled={!!launching}
-              onClick={() => launch(active.id)}
-              className={`mt-3 inline-flex items-center gap-1 rounded-full bg-gradient-to-r px-4 py-1.5 text-[11px] font-bold text-white shadow-lg transition-transform hover:scale-105 disabled:opacity-70 ${active.btn}`}
+              className="journey-rotate"
+              onClick={() => setRotationSteps((steps) => steps + 1)}
+              disabled={launching}
             >
-              {launching === active.id ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Opening...
-                </>
-              ) : (
-                <>
-                  Begin <ArrowRight className="h-3 w-3" />
-                </>
-              )}
+              <RotateCw aria-hidden="true" /> Rotate
             </button>
           </div>
 
-          {ROLES.map((role, i) => {
-            const slot = slotOf(i);
-            const angle = (SLOT_ANGLE[slot] * Math.PI) / 180;
-            const x = Math.cos(angle) * RADIUS;
-            const y = Math.sin(angle) * RADIUS;
-            const isActive = i === activeIndex;
-            const Icon = role.icon;
-            return (
-              <button
-                key={role.id}
-                type="button"
-                onClick={() => (isActive ? launch(role.id) : focusRole(i))}
-                className="absolute left-1/2 top-1/2 z-10 flex flex-col items-center"
-                style={{
-                  transform: `translate(-50%, -50%) translate(${x}px, ${y}px)`,
-                  transition: "transform 0.7s cubic-bezier(0.22,1,0.36,1)",
-                }}
-              >
-                <div
-                  className={`flex items-center justify-center rounded-2xl border-2 bg-white shadow-lg transition-all duration-500 ${
-                    isActive
-                      ? `h-16 w-16 ring-4 ${role.ring} ${launching === role.id ? "journey-launch" : ""}`
-                      : "h-12 w-12 border-slate-200 opacity-70 hover:opacity-100"
-                  }`}
-                  style={
-                    isActive
-                      ? { boxShadow: `0 0 24px ${role.color}66, 0 8px 24px rgba(0,0,0,0.08)` }
-                      : undefined
-                  }
-                >
-                  <Icon className={`${isActive ? "h-8 w-8" : "h-6 w-6"} ${isActive ? "text-slate-900" : "text-slate-400"}`} />
-                </div>
-                <span
-                  className={`mt-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold transition-all ${
-                    isActive ? role.chip : "text-slate-400"
-                  }`}
-                >
-                  {role.label}
-                </span>
-              </button>
-            );
-          })}
-
-          <button
-            type="button"
-            onClick={rotateClockwise}
-            className="absolute -bottom-2 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-white px-4 py-2 text-xs font-bold shadow-md transition-all hover:shadow-lg"
-            style={{ borderColor: `${active.color}55`, color: active.color }}
-          >
-            <RotateCw className="h-3.5 w-3.5" /> Rotate
-          </button>
+          <div className="journey-preview" data-preview-role={active.id}>
+            <JourneyCompanion role={active.id} />
+            <div className="journey-preview-copy">
+              <p>{active.tagline}</p>
+              <ul>{active.perks.map((perk) => <li key={perk}>{perk}</li>)}</ul>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div className="mt-6 text-center">
-        <button
-          type="button"
-          onClick={onLogin}
-          className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/60 px-4 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:bg-white hover:text-foreground"
-        >
-          <LogIn className="h-3.5 w-3.5" />
-          Already registered? <span className="font-semibold text-amber-600 underline">Sign in</span>
+        <button type="button" className="journey-signin" onClick={onLogin} disabled={launching}>
+          <LogIn aria-hidden="true" /> Already registered? <strong>Sign in</strong>
         </button>
       </div>
-      </div>
-    </div>
+    </section>
   );
 }

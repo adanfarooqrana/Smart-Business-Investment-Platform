@@ -557,7 +557,7 @@ export default function RedditCommunityModal({ isOpen, onClose }: RedditCommunit
                 </div>
                 
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  The primary digital lounge for verified SmartBiz entrepreneurs, accredited capital matchmakers, and industry consultants.
+                  The primary digital lounge for verified InvestBiz entrepreneurs, accredited capital matchmakers, and industry consultants.
                 </p>
 
                 <div className="space-y-2">

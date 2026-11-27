@@ -1,3 +1,5 @@
+import { FounderBankReview } from "./FounderBankReview";
+import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -30,8 +32,9 @@ type TabId = KycReviewRole;
 
 const TABS: { id: TabId; label: string; icon: typeof Building2 }[] = [
   { id: "business_owner", label: "Business Owner", icon: Building2 },
-  { id: "founder", label: "Founder", icon: Lightbulb },
+  { id: "founder", label: "Entrepreneur", icon: Lightbulb },
   { id: "investor", label: "Investor", icon: Wallet },
+  { id: "wholesaler", label: "Wholesaler", icon: Building2 },
 ];
 
 function MediaPreview({ label, src }: { label: string; src?: string }) {
@@ -67,6 +70,8 @@ function ReviewCard({
   onApprove: (uid: string) => void;
   onReject: (uid: string) => void;
 }) {
+  const { currentUser } = useAuth();
+  const [bankReviewReady, setBankReviewReady] = useState(false);
   const busy = busyId === record.uid;
   const pending = record.kycStatus === "pending";
   const isBusinessOwner = record.role === "business_owner";
@@ -189,10 +194,12 @@ function ReviewCard({
         <MediaPreview label="Live Selfie" src={record.liveSelfieUrl} />
       </div>
 
+      {record.role === "founder" && currentUser && <FounderBankReview user={currentUser} uid={record.uid} onReady={setBankReviewReady} />}
+
       {pending ? (
         <div className="mt-5 grid gap-2 sm:grid-cols-2">
           <Button
-            disabled={busy}
+            disabled={busy || (record.role === "founder" && !bankReviewReady)}
             onClick={() => onApprove(record.uid)}
             className="rounded-xl bg-emerald-600 py-5 text-sm font-bold text-white hover:bg-emerald-700"
           >

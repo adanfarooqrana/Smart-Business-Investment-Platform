@@ -15,8 +15,19 @@ export function BusinessSignupCinema({ children }: BusinessSignupCinemaProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoOk, setVideoOk] = useState(false);
 
+  const attemptPlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = true;
+    v.play()
+      .then(() => setVideoOk(true))
+      .catch((err) => {
+        console.warn("[BusinessSignupCinema] Autoplay attempt:", err);
+      });
+  };
+
   useEffect(() => {
-    videoRef.current?.play().catch(() => setVideoOk(false));
+    attemptPlay();
   }, []);
 
   const emojiTokens = useMemo(
@@ -56,8 +67,9 @@ export function BusinessSignupCinema({ children }: BusinessSignupCinemaProps) {
         loop
         playsInline
         preload="auto"
-        onCanPlay={() => setVideoOk(true)}
-        onLoadedData={() => setVideoOk(true)}
+        onCanPlay={attemptPlay}
+        onLoadedData={attemptPlay}
+        onCanPlayThrough={attemptPlay}
         onError={() => setVideoOk(false)}
       />
 

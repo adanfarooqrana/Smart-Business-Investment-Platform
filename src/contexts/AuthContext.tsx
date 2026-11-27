@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from "r
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut,
   onAuthStateChanged,
   type User,
@@ -10,6 +11,7 @@ import { ref, set, get } from "firebase/database";
 import { auth, database } from "../firebase";
 import { setGlobalPoints } from "@/hooks/useAppState";
 import { syncPlatformStatsToRtdb } from "@/services/platformStatsService";
+import { clearLocalOnboardingSession } from "@/lib/onboardingResume";
 
 export const USER_ROLES = {
   FOUNDER: "founder",
@@ -67,6 +69,8 @@ interface AuthContextType {
   signup: (email: string, password: string, name: string, role: UserRole) => Promise<User>;
   signupUser: (input: SignupUserInput) => Promise<User>;
   login: (email: string, password: string) => Promise<User>;
+  /** Sends a password-reset link to the registered email (Firebase Auth). */
+  resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUserData: (uid: string) => Promise<AppUserData | null>;
 }
@@ -91,7 +95,6 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
 
 async function fetchUserData(uid: string): Promise<AppUserData | null> {
   try {
-    // Founders: authoritative metadata lives under founders/{uid}/profile
     const founderSnap = await get(ref(database, `founders/${uid}/profile`));
     if (founderSnap.exists()) {
       const profile = founderSnap.val() as Record<string, unknown>;
@@ -105,7 +108,6 @@ async function fetchUserData(uid: string): Promise<AppUserData | null> {
       };
     }
 
-    // Investors: prefer isolated profile node
     try {
       const invSnap = await get(ref(database, `investors/${uid}/profile`));
       if (invSnap.exists()) {
@@ -122,8 +124,6 @@ async function fetchUserData(uid: string): Promise<AppUserData | null> {
       /* non-fatal */
     }
 
-    // Business owners / users node BEFORE community_members
-    // (prevents workspace accounts from being misclassified as community_member)
     const snapshot = await get(ref(database, `users/${uid}`));
     if (snapshot.exists()) {
       const data = snapshot.val() as AppUserData;
@@ -169,14 +169,8 @@ async function fetchUserData(uid: string): Promise<AppUserData | null> {
           email: String(data.email ?? ""),
         };
       }
-
-      // Legacy entrepreneur/founder under users → ignore here (founders path already checked)
-      if (data.role === "entrepreneur" || data.role === "founder") {
-        /* fall through */
-      }
     }
 
-    // Also detect business_owners profile even if users/{uid} is incomplete
     try {
       const ownerSnap = await get(ref(database, `business_owners/${uid}/profile`));
       if (ownerSnap.exists()) {
@@ -198,7 +192,6 @@ async function fetchUserData(uid: string): Promise<AppUserData | null> {
       /* non-fatal */
     }
 
-    // Community members LAST — only if no workspace profile exists
     try {
       const cmSnap = await get(ref(database, `community_members/${uid}`));
       if (cmSnap.exists()) {
@@ -216,7 +209,6 @@ async function fetchUserData(uid: string): Promise<AppUserData | null> {
       /* non-fatal */
     }
 
-    // users/{uid} with community_member (or incomplete) after workspace checks failed
     if (snapshot.exists()) {
       const data = snapshot.val() as AppUserData;
       if (data.role === "community_member") {
@@ -242,15 +234,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userData, setUserData] = useState<AppUserData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  /** Last known credentials — survive transient multi-tab auth flickers */
   const lastUserRef = useRef<User | null>(null);
   const lastUserDataRef = useRef<AppUserData | null>(null);
-  /** Cleared only when logout() intentionally calls signOut */
   const intentionalLogoutRef = useRef(false);
 
-  /**
-   * Full signup. Founders: Firebase Auth only — profile lives under founders/{uid}/…
-   */
   async function signupUser({
     email,
     password,
@@ -260,6 +247,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }: SignupUserInput): Promise<User> {
     try {
       intentionalLogoutRef.current = false;
+      clearLocalOnboardingSession();
+
       const credential = await createUserWithEmailAndPassword(auth, email, password);
       const user = credential.user;
       const createdAt = Date.now();
@@ -293,7 +282,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (role === "investor") {
-        // Profile write is handled by InvestorOnboarding → commitInvestorProfile
         lastUserRef.current = user;
         lastUserDataRef.current = baseProfile;
         setCurrentUser(user);
@@ -372,7 +360,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  /** Lightweight signup kept for backwards compatibility with existing callers. */
   async function signup(
     email: string,
     password: string,
@@ -388,16 +375,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return credential.user;
   }
 
+  async function resetPassword(email: string): Promise<void> {
+    const clean = String(email || "").trim().toLowerCase();
+    if (!clean || !clean.includes("@")) {
+      throw new Error("Enter the email you used to register.");
+    }
+    await sendPasswordResetEmail(auth, clean);
+  }
+
   async function logout(): Promise<void> {
     intentionalLogoutRef.current = true;
     try {
+      clearLocalOnboardingSession();
       await signOut(auth);
       lastUserRef.current = null;
       lastUserDataRef.current = null;
       setCurrentUser(null);
       setUserData(null);
 
-      // Wipe auth caches so Landing → Community cannot inherit a workspace session
       if (typeof window !== "undefined") {
         try {
           localStorage.removeItem("smartbiz_community_session");
@@ -434,7 +429,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       try {
         if (!user) {
-          // Hard logout only — ignore null events during multi-tab token refresh
           if (intentionalLogoutRef.current) {
             lastUserRef.current = null;
             lastUserDataRef.current = null;
@@ -442,9 +436,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUserData(null);
             intentionalLogoutRef.current = false;
           } else if (lastUserRef.current) {
-            console.warn(
-              "Auth null event ignored (no deliberate logout) — keeping cached session credentials.",
-            );
             setCurrentUser(lastUserRef.current);
             if (lastUserDataRef.current) setUserData(lastUserDataRef.current);
           } else {
@@ -456,8 +447,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         intentionalLogoutRef.current = false;
-        // Always track the live Auth UID — never keep a previous account after re-login
         if (lastUserRef.current && lastUserRef.current.uid !== user.uid) {
+          clearLocalOnboardingSession();
           lastUserDataRef.current = null;
           setUserData(null);
         }
@@ -467,7 +458,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const data = await fetchUserData(user.uid);
           if (data) {
-            // Force uid field to match Auth — prevents detached node remapping
             const locked: AppUserData = { ...data, uid: user.uid };
             lastUserDataRef.current = locked;
             setUserData(locked);
@@ -475,7 +465,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             lastUserDataRef.current &&
             lastUserDataRef.current.uid === user.uid
           ) {
-            // Keep previous role metadata for same uid if fetch briefly fails/empty
             setUserData(lastUserDataRef.current);
           } else {
             setUserData(null);
@@ -517,10 +506,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signup,
     signupUser,
     login,
+    resetPassword,
     logout,
     refreshUserData,
   };
 
-  // Always render children — local dashboard state lives in useAppState (localStorage).
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

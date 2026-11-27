@@ -1,19 +1,42 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   User, Briefcase, Mail, Lock, Phone,
-  ShieldCheck, Loader2, ArrowRight, Undo2
+  ShieldCheck, Loader2, ArrowRight, Undo2, IdCard
 } from "lucide-react";
 import { useAppState } from "@/hooks/useAppState";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { KycPendingGate } from "@/components/kyc/KycPendingGate";
 import { BusinessSignupCinema } from "@/components/onboarding/BusinessSignupCinema";
-import { CnicFaceVerify } from "@/components/verification/CnicFaceVerify";
+import { CnicFaceVerify, type CnicFaceResult } from "@/components/verification/CnicFaceVerify";
 import { EmailVerificationGate } from "@/components/auth/EmailVerificationGate";
 import { BusinessOwnerService } from "@/services/businessOwnerService";
-import { friendlyIdentityError } from "@/services/identityVerificationService";
+import {
+  createEmailPasswordAndSendVerification,
+  friendlyIdentityError,
+} from "@/services/identityVerificationService";
+import { FACE_MATCH_THRESHOLD } from "@/lib/kycService";
+import { isFaceMatchAcceptable, USE_SIMULATED_KYC } from "@/lib/kycBypass";
+import {
+  syncStage1ToFirestore,
+  syncStage2ToFirestore,
+  syncStage3ToFirestore,
+} from "@/services/onboardingFirestoreService";
+import { sanitizeExtractedCnic, formatPakistaniCnic } from "@/lib/kycOcrService";
+import {
+  clearLocalOnboardingSession,
+  resolveWizardUiStage,
+} from "@/lib/onboardingResume";
+
+/** Manual CNIC entry — 13 digits → XXXXX-XXXXXXX-X (no OCR heuristics). */
+function normalizeManualCnic(raw: string): string {
+  const digits = String(raw || "").replace(/\D/g, "");
+  if (digits.length !== 13) return "";
+  if (/^0{13}$/.test(digits)) return "";
+  return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
+}
 
 const CATEGORIES = [
   { value: "Food & Beverage", label: "Food & Beverage" },
@@ -43,20 +66,16 @@ const PAKISTAN_CITIES = [
 ];
 
 interface BusinessOwnerSignupProps {
+  resume?: boolean;
   onBack: () => void;
 }
 
-/**
- * Steps:
- * 1 — credentials + email verification wait
- * 2 — business + CNIC details (phone at end)
- * 3 — biometric KYC
- * 4 — admin wait (KycPendingGate)
- */
-export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
+export function BusinessOwnerSignup({ onBack, resume = false }: BusinessOwnerSignupProps) {
+  const navigate = useNavigate();
   const { registerBusiness, approveBusiness, setIsLoggedIn } = useAppState();
-  const { refreshUserData } = useAuth();
+  const { refreshUserData, currentUser } = useAuth();
   const [step, setStep] = useState(1);
+  const [resumeReady, setResumeReady] = useState(false);
   const [businessStarted, setBusinessStarted] = useState(false);
   const [uid, setUid] = useState("");
   const [awaitingEmailVerification, setAwaitingEmailVerification] = useState(false);
@@ -86,6 +105,103 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
   const [registrationError, setRegistrationError] = useState("");
   const [verifyingDetails, setVerifyingDetails] = useState(false);
   const [submitDone, setSubmitDone] = useState(false);
+  const [savingDetails, setSavingDetails] = useState(false);
+
+  useEffect(() => {
+    clearLocalOnboardingSession();
+  }, []);
+
+  // Resume: 1=credentials, 2=business details, 3=KYC, completed→dashboard
+  useEffect(() => {
+    const existingUid = currentUser?.uid;
+    if (!resume || !existingUid) {
+      setResumeReady(true);
+      return;
+    }
+    let cancelled = false;
+    setResumeReady(false);
+    void (async () => {
+      try {
+        const { getFirestoreOnboardingDoc } = await import("@/services/onboardingFirestoreService");
+        let fsDoc = await getFirestoreOnboardingDoc(existingUid);
+        if (cancelled) return;
+        setUid(existingUid);
+
+        try {
+          await currentUser.reload();
+        } catch {
+          /* ignore */
+        }
+
+        const emailVerified = Boolean(currentUser.emailVerified);
+        if (!emailVerified) {
+          setStep(1);
+          setResumeReady(true);
+          return;
+        }
+
+        if (fsDoc && fsDoc.role !== "business_owner") return;
+        const resolved = resolveWizardUiStage({ emailVerified: true, fsDoc });
+
+        if (resolved.ensureStage1Doc) {
+          await syncStage1ToFirestore({
+            uid: existingUid,
+            email: currentUser.email || formData.email || "",
+            role: "business_owner",
+            emailVerified: true,
+            fullName: formData.fullName || undefined,
+          });
+          if (cancelled) return;
+          fsDoc = await getFirestoreOnboardingDoc(existingUid);
+        }
+
+        if (fsDoc) {
+          const rd = (fsDoc.profile?.roleDetails || {}) as Record<string, string>;
+          setFormData((prev) => ({
+            ...prev,
+            fullName: String(fsDoc.profile?.fullName || prev.fullName || "").trim(),
+            cnic:
+              normalizeManualCnic(fsDoc.profile?.cnicNumber || "") ||
+              sanitizeExtractedCnic(fsDoc.profile?.cnicNumber) ||
+              prev.cnic,
+            email: fsDoc.email || currentUser.email || prev.email,
+            businessName: rd.businessName || prev.businessName,
+            location: rd.location || prev.location,
+            exactLocation: rd.exactLocation || prev.exactLocation,
+            category: rd.category || prev.category,
+            subcategory: rd.subcategory || prev.subcategory,
+            size: rd.size || prev.size,
+            trademark: rd.trademark || prev.trademark,
+            about: rd.about || prev.about,
+            phone: rd.phone || prev.phone,
+            cnicFront: fsDoc.kyc?.cnicFrontUrl || prev.cnicFront,
+            cnicBack: fsDoc.kyc?.cnicBackUrl || prev.cnicBack,
+            liveSelfie: fsDoc.kyc?.selfieUrl || prev.liveSelfie,
+            faceMatchScore: Number(fsDoc.kyc?.matchScore || prev.faceMatchScore) || 0,
+          }));
+        }
+
+        if (resolved.goDashboard) {
+          setIsLoggedIn(true);
+          setSubmitDone(true);
+          navigate({ to: "/app/score" });
+          return;
+        }
+
+        setStep(resolved.stage);
+        setBusinessStarted(true);
+      } catch (err) {
+        console.warn("Business signup resume error:", err);
+        setStep(1);
+      } finally {
+        if (!cancelled) setResumeReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resume, currentUser?.uid, currentUser?.email, navigate]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -100,8 +216,12 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
   };
 
   const handleRegisterCredentials = async () => {
-    if (!formData.fullName || !formData.email || !formData.password) {
-      alert("Please fill in all required fields.");
+    if (!formData.fullName.trim()) {
+      alert("Please enter your full name.");
+      return;
+    }
+    if (!formData.email || !formData.password) {
+      alert("Please enter your email and password.");
       return;
     }
     const hint = getPasswordHint(formData.password);
@@ -114,15 +234,14 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
     setVerifyingDetails(true);
     setRegistrationError("");
     try {
-      const res = await BusinessOwnerService.registerStep1({
-        fullName: formData.fullName,
+      const user = await createEmailPasswordAndSendVerification({
+        role: "business_owner",
+        fullName: formData.fullName.trim(),
         email: formData.email,
         password: formData.password,
       });
-      if (res.success && res.uid) {
-        setUid(res.uid);
-        setAwaitingEmailVerification(true);
-      }
+      setUid(user.uid);
+      setAwaitingEmailVerification(true);
     } catch (err: unknown) {
       setRegistrationError(friendlyIdentityError(err) || "Email is already in use!");
     } finally {
@@ -136,32 +255,78 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
   };
 
   const handleSaveBusinessDetails = async () => {
-    if (!formData.businessName || !formData.location || !formData.phone || !formData.cnic || !formData.trademark) {
-      alert("Please fill in all required fields (Business Name, Location, Phone, CNIC, and Trademark Number).");
+    const cnic =
+      normalizeManualCnic(formData.cnic) ||
+      formatPakistaniCnic(formData.cnic) ||
+      sanitizeExtractedCnic(formData.cnic);
+    if (!formData.fullName.trim()) {
+      setRegistrationError("Full name from Stage 1 is missing. Go back and enter your name.");
+      return;
+    }
+    if (!formData.businessName.trim()) {
+      setRegistrationError("Official Business Name is required.");
+      return;
+    }
+    if (!formData.location.trim()) {
+      setRegistrationError("Operational Location is required.");
+      return;
+    }
+    if (!formData.phone.trim()) {
+      setRegistrationError("Phone Number is required.");
+      return;
+    }
+    if (!cnic) {
+      setRegistrationError("Enter a valid CNIC as XXXXX-XXXXXXX-X (13 digits).");
+      return;
+    }
+    if (!formData.trademark.trim()) {
+      setRegistrationError("Registered Trademark Number is required.");
       return;
     }
 
-    setVerifyingDetails(true);
+    setSavingDetails(true);
     setRegistrationError("");
     try {
-      await BusinessOwnerService.registerStep3(uid, {
-        businessName: formData.businessName,
-        operationalLocation: formData.location,
-        exactLocation: formData.exactLocation,
-        coreCategory: formData.category,
-        subcategory: formData.subcategory || "General",
-        teamSize: formData.size,
-        trademarkNumber: formData.trademark,
-        pitch: formData.about || `A premium ${formData.category} business based in ${formData.location}.`,
-        phone: formData.phone,
-        cnic: formData.cnic,
-      });
+      if (uid) {
+        await syncStage2ToFirestore({
+          uid,
+          email: formData.email,
+          role: "business_owner",
+          fullName: formData.fullName.trim(),
+          cnicNumber: cnic,
+          roleDetails: {
+            businessName: formData.businessName,
+            location: formData.location,
+            exactLocation: formData.exactLocation,
+            category: formData.category,
+            subcategory: formData.subcategory || "General",
+            size: formData.size,
+            trademark: formData.trademark,
+            about: formData.about,
+            phone: formData.phone,
+          },
+        });
+      }
+      setFormData((prev) => ({ ...prev, cnic }));
       setStep(3);
-    } catch (err: unknown) {
-      setRegistrationError(friendlyIdentityError(err) || "Failed to save business details.");
+    } catch (err) {
+      console.error(err);
+      setRegistrationError(
+        err instanceof Error ? err.message : "Failed to save business details.",
+      );
     } finally {
-      setVerifyingDetails(false);
+      setSavingDetails(false);
     }
+  };
+
+  const handleKycComplete = (r: CnicFaceResult) => {
+    setFormData((prev) => ({
+      ...prev,
+      cnicFront: r.cnicFront,
+      cnicBack: r.cnicBack,
+      liveSelfie: r.liveSelfie,
+      faceMatchScore: r.matchConfidenceScore || r.faceMatchScore || 0,
+    }));
   };
 
   const handleSubmitBusiness = async () => {
@@ -169,8 +334,21 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
       alert("Please complete biometric uploading (CNIC Front, Back, and Live Selfie).");
       return;
     }
-    if (formData.faceMatchScore < 70) {
-      alert("Face match must be at least 70%. Capture a clearer live selfie and verify again.");
+    if (!isFaceMatchAcceptable(formData.faceMatchScore, true)) {
+      alert(
+        USE_SIMULATED_KYC
+          ? "Complete the face-match scan before proceeding."
+          : `Face match must be at least ${FACE_MATCH_THRESHOLD}%. Capture a clearer live selfie and verify again.`,
+      );
+      return;
+    }
+
+    const cnic =
+      normalizeManualCnic(formData.cnic) ||
+      sanitizeExtractedCnic(formData.cnic) ||
+      formData.cnic.trim();
+    if (!formData.fullName.trim() || !cnic) {
+      alert("Full name and CNIC number are required. Go back to Stage 2 if needed.");
       return;
     }
 
@@ -185,48 +363,62 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
         ensureCloudinaryUrl(formData.liveSelfie, "selfies"),
       ]);
 
+      const roleDetails = {
+        businessName: formData.businessName,
+        location: formData.location,
+        exactLocation: formData.exactLocation,
+        category: formData.category,
+        subcategory: formData.subcategory || "General",
+        size: formData.size,
+        trademark: formData.trademark,
+        about: formData.about,
+        phone: formData.phone,
+      };
+
+      await syncStage3ToFirestore({
+        uid,
+        email: formData.email,
+        role: "business_owner",
+        fullName: formData.fullName.trim(),
+        cnicNumber: cnic,
+        roleDetails,
+        kyc: {
+          status: "pending",
+          cnicFrontUrl,
+          cnicBackUrl,
+          selfieUrl,
+          matchScore: formData.faceMatchScore,
+          mode: USE_SIMULATED_KYC ? "simulated" : "direct",
+        },
+      });
+
+      await BusinessOwnerService.registerStep3(uid, {
+        businessName: formData.businessName,
+        operationalLocation: formData.location,
+        exactLocation: formData.exactLocation,
+        coreCategory: formData.category,
+        subcategory: formData.subcategory || "General",
+        teamSize: formData.size,
+        trademarkNumber: formData.trademark,
+        pitch: formData.about || `A premium ${formData.category} business based in ${formData.location}.`,
+        phone: formData.phone,
+        cnic,
+      });
+
       await BusinessOwnerService.registerStep4(uid, {
         cnicFrontUrl,
         cnicBackUrl,
         selfieUrl,
       });
 
-      try {
-        const { doc, setDoc, serverTimestamp } = await import("firebase/firestore");
-        const { firestore } = await import("@/firebase");
-        await setDoc(
-          doc(firestore, "users", uid),
-          {
-            role: "business_owner",
-            cnicFrontUrl,
-            cnicBackUrl,
-            liveSelfieUrl: selfieUrl,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-        await setDoc(
-          doc(firestore, "business_owners", uid),
-          {
-            cnicFrontUrl,
-            cnicBackUrl,
-            liveSelfieUrl: selfieUrl,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-      } catch (fsErr) {
-        console.warn("Firestore CNIC mirror skipped:", fsErr);
-      }
-
       const { submitPendingKycReview } = await import("@/services/adminKycService");
       await submitPendingKycReview({
         uid,
         role: "business_owner",
-        fullName: formData.fullName || formData.businessName,
+        fullName: formData.fullName.trim() || formData.businessName,
         email: formData.email,
         phoneNumber: formData.phone,
-        cnic: formData.cnic,
+        cnic,
         businessName: formData.businessName,
         trademark: formData.trademark,
         location: formData.location,
@@ -256,11 +448,13 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
         liveSelfie: selfieUrl,
       });
 
+      approveBusiness();
+      setIsLoggedIn(true);
       await refreshUserData(uid);
 
       setSubmitDone(true);
       setVerifyingDetails(false);
-      setStep(4);
+      navigate({ to: "/app/score" });
     } catch (err: unknown) {
       console.error(err);
       setRegistrationError(
@@ -309,43 +503,45 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
         </div>
       ) : (
         <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-6 py-8">
-          {step < 4 && (
-            <div className="mb-8 flex items-center justify-between border-b border-white/20 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg">
-                  <Briefcase className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-200">Business Owner Registration</p>
-                  <h2 className="font-display text-lg font-bold text-white">Secure Compliance Boarding</h2>
-                </div>
+          <div className="mb-8 flex items-center justify-between border-b border-white/20 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg">
+                <Briefcase className="h-5 w-5" />
               </div>
-
-              <div className="flex items-center gap-1.5">
-                {[1, 2, 3].map((s) => (
-                  <div
-                    key={s}
-                    className={`h-2.5 rounded-full transition-all duration-300 ${
-                      s === step
-                        ? "w-8 bg-accent"
-                        : s < step
-                        ? "w-2.5 bg-accent/65"
-                        : "w-2.5 bg-secondary"
-                    }`}
-                  />
-                ))}
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-200">Business Owner Registration</p>
+                <h2 className="font-display text-lg font-bold text-white">
+                  {step === 1 && "1. Credentials & Authentication"}
+                  {step === 2 && "2. Business Profile & Role Details"}
+                  {step === 3 && "3. Biometric & Identity Verification"}
+                </h2>
               </div>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onBack}
-                className="rounded-full h-8 w-8 text-muted-foreground hover:text-foreground"
-              >
-                <Undo2 className="h-3.5 w-3.5" />
-              </Button>
             </div>
-          )}
+
+            <div className="flex items-center gap-1.5">
+              {[1, 2, 3].map((s) => (
+                <div
+                  key={s}
+                  className={`h-2.5 rounded-full transition-all duration-300 ${
+                    s === step
+                      ? "w-8 bg-accent"
+                      : s < step
+                      ? "w-2.5 bg-accent/65"
+                      : "w-2.5 bg-secondary"
+                  }`}
+                />
+              ))}
+            </div>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onBack}
+              className="rounded-full h-8 w-8 text-muted-foreground hover:text-foreground"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
 
           {registrationError && (
             <div className="mb-4 rounded-xl bg-destructive/15 border border-destructive/30 p-4 text-xs text-destructive">
@@ -353,7 +549,6 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
             </div>
           )}
 
-          {/* STEP 1: CREDENTIALS + EMAIL VERIFICATION */}
           {step === 1 && (
             <div className="rounded-3xl border border-white/25 bg-white/92 p-8 shadow-2xl shadow-black/20 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-300">
               {awaitingEmailVerification ? (
@@ -361,10 +556,10 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
                   <div className="mb-6">
                     <h3 className="font-display text-xl font-bold">1. Verify Your Email</h3>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Confirm your inbox before business details and KYC.
+                      Confirm your inbox before continuing to business details.
                     </p>
                   </div>
-                  <EmailVerificationGate
+                  <EmailVerificationGate role="business_owner"
                     email={formData.email}
                     onVerified={handleEmailVerified}
                     accentClassName="text-amber-600"
@@ -373,9 +568,9 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
               ) : (
                 <>
                   <div className="mb-6">
-                    <h3 className="font-display text-xl font-bold">1. Personal Details Setup</h3>
+                    <h3 className="font-display text-xl font-bold">1. Basic Authentication Setup</h3>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Create your account — email verification is required next.
+                      Enter your full name, email, and password to create your account.
                     </p>
                   </div>
 
@@ -386,6 +581,8 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
                       </Label>
                       <Input
                         id="owner-name"
+                        type="text"
+                        name="fullName"
                         placeholder="Enter your full name"
                         value={formData.fullName}
                         onChange={(e) => handleInputChange("fullName", e.target.value)}
@@ -432,7 +629,7 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
                       <Button
                         onClick={() => void handleRegisterCredentials()}
                         disabled={verifyingDetails}
-                        className="w-full bg-foreground text-background hover:opacity-90"
+                        className="w-full bg-foreground text-background hover:opacity-90 font-bold"
                       >
                         {verifyingDetails ? (
                           <span className="flex items-center gap-1.5">
@@ -440,7 +637,7 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
                             Creating account…
                           </span>
                         ) : (
-                          "Continue"
+                          "Continue to Email Verification"
                         )}
                       </Button>
                     </div>
@@ -450,13 +647,12 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
             </div>
           )}
 
-          {/* STEP 2: BUSINESS + CNIC DETAILS (phone at end) */}
           {step === 2 && (
             <div className="rounded-3xl border border-white/25 bg-white/92 p-8 shadow-2xl shadow-black/20 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-300">
               <div className="mb-6 flex items-center justify-between">
                 <div>
                   <h3 className="font-display text-xl font-bold">2. Business Profile Details</h3>
-                  <p className="text-xs text-muted-foreground mt-1">Provide register details & Trademark validation.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Provide business information & Trademark validation.</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setStep(1)} className="rounded-full">
                   Back
@@ -465,25 +661,27 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
 
               <div className="space-y-4">
                 <div className="space-y-1.5">
+                  <Label htmlFor="owner-cnic" className="flex items-center gap-1">
+                    <IdCard className="h-3.5 w-3.5 text-muted-foreground" /> CNIC Number <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="owner-cnic"
+                    type="text"
+                    name="cnicNumber"
+                    value={formData.cnic || ""}
+                    placeholder="XXXXX-XXXXXXX-X"
+                    onChange={(e) => handleInputChange("cnic", e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
                   <Label htmlFor="biz-name">Official Business Name <span className="text-destructive">*</span></Label>
                   <Input
                     id="biz-name"
                     placeholder="Enter your business name"
                     value={formData.businessName}
                     onChange={(e) => handleInputChange("businessName", e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="owner-cnic" className="flex items-center gap-1">
-                    <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" /> CNIC Number <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="owner-cnic"
-                    placeholder="Enter your CNIC number (e.g. 42101-1234567-8)"
-                    value={formData.cnic}
-                    onChange={(e) => handleInputChange("cnic", e.target.value)}
                     required
                   />
                 </div>
@@ -590,19 +788,25 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
                   />
                 </div>
 
-                <div className="pt-4">
+                <div className="pt-4 space-y-2">
+                  {registrationError && step === 2 ? (
+                    <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                      {registrationError}
+                    </p>
+                  ) : null}
                   <Button
+                    type="button"
                     onClick={() => void handleSaveBusinessDetails()}
-                    disabled={verifyingDetails}
-                    className="w-full bg-foreground text-background hover:opacity-90 disabled:opacity-50"
+                    disabled={savingDetails}
+                    className="w-full bg-foreground text-background hover:opacity-90 font-bold disabled:opacity-60"
                   >
-                    {verifyingDetails ? (
+                    {savingDetails ? (
                       <span className="flex items-center gap-1.5">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Saving…
                       </span>
                     ) : (
-                      "Continue to Biometric Verification"
+                      <>Continue to Identity Verification <ArrowRight className="ml-2 h-4 w-4" /></>
                     )}
                   </Button>
                 </div>
@@ -610,16 +814,15 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
             </div>
           )}
 
-          {/* STEP 3: BIOMETRIC / ID VERIFICATION */}
           {step === 3 && (
             <div className="rounded-3xl border border-white/25 bg-white/92 p-8 shadow-2xl shadow-black/20 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-300">
               <div className="mb-6 flex items-center justify-between">
                 <div>
                   <h3 className="font-display text-xl font-bold flex items-center gap-2">
                     <ShieldCheck className="h-5 w-5 text-accent animate-pulse" />
-                    3. National Identity & Biometric Audit
+                    3. National Identity & Biometric Verification (KYC)
                   </h3>
-                  <p className="text-xs text-muted-foreground mt-1">Upload government-issued CNIC Card and take a Live Verification Selfie.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Upload CNIC Front, Back, and capture a Live Selfie.</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setStep(2)} className="rounded-full">
                   Back
@@ -629,15 +832,8 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
               <div className="space-y-6">
                 <CnicFaceVerify
                   accent="amber"
-                  onComplete={(r) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      cnicFront: r.cnicFront,
-                      cnicBack: r.cnicBack,
-                      liveSelfie: r.liveSelfie,
-                      faceMatchScore: r.matchConfidenceScore || r.faceMatchScore || 0,
-                    }))
-                  }
+                  resetKey={`biz-${formData.email || "guest"}-step3`}
+                  onComplete={handleKycComplete}
                   onMatchFailed={() =>
                     setFormData((prev) => ({
                       ...prev,
@@ -654,45 +850,24 @@ export function BusinessOwnerSignup({ onBack }: BusinessOwnerSignupProps) {
                       verifyingDetails ||
                       submitDone ||
                       !formData.liveSelfie ||
-                      formData.faceMatchScore < 70
+                      !isFaceMatchAcceptable(
+                        formData.faceMatchScore,
+                        !!(formData.cnicFront && formData.cnicBack && formData.liveSelfie),
+                      )
                     }
-                    className="w-full bg-foreground text-background hover:opacity-90"
+                    className="w-full bg-foreground text-background hover:opacity-90 font-bold"
                   >
-                    {submitDone ? (
-                      "Done, wait for admin approval"
-                    ) : verifyingDetails ? (
+                    {verifyingDetails ? (
                       <span className="flex items-center gap-1.5">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Analyzing Biometrics & Securing Ledger...
+                        Saving Profile &amp; Redirecting…
                       </span>
                     ) : (
-                      "Submit Profile for Admin Compliance Approval"
+                      "Done"
                     )}
                   </Button>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* STEP 4: WAIT FOR ADMIN APPROVAL */}
-          {step === 4 && (
-            <div className="rounded-3xl border border-white/25 bg-white/92 p-8 shadow-2xl shadow-black/20 backdrop-blur-xl animate-in zoom-in-95 duration-400">
-              {uid ? (
-                <KycPendingGate
-                  uid={uid}
-                  role="business_owner"
-                  email={formData.email}
-                  approvedPath="/app/score"
-                  onApproved={() => {
-                    approveBusiness();
-                    setIsLoggedIn(true);
-                  }}
-                />
-              ) : (
-                <p className="text-center text-sm text-muted-foreground">
-                  Session missing — please log in again after admin approval.
-                </p>
-              )}
             </div>
           )}
         </div>

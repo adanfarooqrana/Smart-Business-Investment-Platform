@@ -1,28 +1,38 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Loader2, ShieldAlert, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, ArrowRight, FileText } from "lucide-react";
 import {
   streamUserKycStatus,
   applyLocalRoleApproval,
-  approveKycReview,
   type KycReviewRecord,
   type KycReviewRole,
 } from "@/services/adminKycService";
-import { KYC_BYPASS_FOR_TESTING } from "@/lib/kycBypass";
+import {
+  resolveOnboardingLock,
+  type OnboardingLockStage,
+} from "@/lib/onboardingResume";
+import { Button } from "@/components/ui/button";
 
 type KycPendingGateProps = {
   uid: string;
   role: KycReviewRole;
   email?: string;
-  /** Where to send the user after admin approval */
-  approvedPath: "/founder/dashboard" | "/app/investor" | "/app/score";
+  approvedPath: "/founder/dashboard" | "/app/investor" | "/app/score" | "/app/wholesale";
   onApproved?: () => void;
   children?: never;
 };
 
+const ROLE_PROFILE_LABEL: Record<KycReviewRole, string> = {
+  business_owner: "Business Details",
+  founder: "Founder Details",
+  investor: "Investor Details",
+  wholesaler: "Wholesaler Details",
+};
+
 /**
- * Blocks dashboard access until kyc_reviews/{uid}.kycStatus === 'approved'.
- * When KYC_BYPASS_FOR_TESTING is true → auto-approve and open dashboard (code kept intact).
+ * KycPendingGate:
+ * Sequential stage guard — immediately bypasses admin approval blocking overlay
+ * and opens the target dashboard once Stage 3 KYC is completed.
  */
 export function KycPendingGate({
   uid,
@@ -34,142 +44,129 @@ export function KycPendingGate({
   const navigate = useNavigate();
   const [record, setRecord] = useState<KycReviewRecord | null>(null);
   const [ready, setReady] = useState(false);
+  const [stage, setStage] = useState<OnboardingLockStage>("loading");
 
-  // Testing bypass: auto-approve → dashboard
+  // Bypass admin block screen and auto-redirect to dashboard when stage is approved or awaiting_admin
   useEffect(() => {
-    if (!KYC_BYPASS_FOR_TESTING || !uid) return;
+    if (!uid) {
+      setReady(true);
+      setStage("needs_profile"); // empty uid → resume registration from details
+      return;
+    }
+
     let cancelled = false;
-    void (async () => {
-      try {
-        await approveKycReview(uid);
-        await applyLocalRoleApproval(uid, role);
-        onApproved?.();
-      } catch (error) {
-        console.warn("KYC bypass auto-approve:", error);
-        try {
-          await applyLocalRoleApproval(uid, role);
-        } catch {
-          /* continue locally */
-        }
+    void resolveOnboardingLock(uid, role).then((info) => {
+      if (cancelled) return;
+      if (info.stage === "approved" || info.stage === "awaiting_admin") {
+        void (async () => {
+          try {
+            await applyLocalRoleApproval(uid, role);
+            onApproved?.();
+          } catch {
+            /* ignore */
+          }
+          if (!cancelled) navigate({ to: approvedPath });
+        })();
+      } else {
+        setStage(info.stage);
       }
-      if (!cancelled) navigate({ to: approvedPath });
-    })();
+    });
+
+    const unsub = streamUserKycStatus(uid, (r) => {
+      setRecord(r);
+      setReady(true);
+      if (r?.kycStatus === "approved" || r?.kycStatus === "pending") {
+        setStage("approved");
+        void (async () => {
+          try {
+            await applyLocalRoleApproval(uid, role);
+            onApproved?.();
+          } catch {
+            /* ignore */
+          }
+          if (!cancelled) navigate({ to: approvedPath });
+        })();
+      } else {
+        void resolveOnboardingLock(uid, role).then((info) => {
+          if (!cancelled && info.stage !== "approved") setStage(info.stage);
+        });
+      }
+    });
+
     return () => {
       cancelled = true;
+      unsub();
     };
   }, [uid, role, approvedPath, navigate, onApproved]);
 
-  useEffect(() => {
-    if (KYC_BYPASS_FOR_TESTING) return;
-    if (!uid) {
-      setReady(true);
-      return;
-    }
-    return streamUserKycStatus(uid, (r) => {
-      setRecord(r);
-      setReady(true);
+  const goResume = () => {
+    void navigate({
+      to: "/app/register",
+      search: { resume: role } as never,
     });
-  }, [uid]);
+  };
 
-  useEffect(() => {
-    if (KYC_BYPASS_FOR_TESTING) return;
-    if (!ready || !record || record.kycStatus !== "approved") return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        await applyLocalRoleApproval(uid, role);
-        onApproved?.();
-      } catch (error) {
-        console.error("KycPendingGate sync error:", error);
-      }
-      if (!cancelled) {
-        navigate({ to: approvedPath });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [ready, record?.kycStatus, uid, role, approvedPath, navigate, onApproved]);
+  const shell = (body: ReactNode) => (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-hidden px-4">
+      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" aria-hidden />
+      <div className="relative z-10 w-full max-w-lg">{body}</div>
+    </div>
+  );
 
-  if (KYC_BYPASS_FOR_TESTING) {
-    return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-        <p className="text-sm font-semibold text-emerald-700">
-          KYC bypassed for testing — opening dashboard…
-        </p>
-        <p className="text-[11px] text-slate-400">
-          Re-enable later: set KYC_BYPASS_FOR_TESTING = false in src/lib/kycBypass.ts
-        </p>
-      </div>
-    );
-  }
-
-  if (!ready) {
-    return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
-        <p className="text-sm text-slate-500">Checking approval status…</p>
-      </div>
-    );
-  }
-
-  if (record?.kycStatus === "approved") {
-    return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-        <p className="text-sm font-semibold text-emerald-700">Approved — opening dashboard…</p>
-      </div>
+  if (!ready || stage === "loading" || stage === "approved" || record?.kycStatus === "approved" || record?.kycStatus === "pending") {
+    return shell(
+      <div className="rounded-3xl border border-emerald-200 bg-white p-8 text-center shadow-2xl">
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-emerald-500" />
+        <p className="mt-3 text-sm font-semibold text-emerald-700">Opening dashboard…</p>
+      </div>,
     );
   }
 
   if (record?.kycStatus === "rejected") {
-    return (
-      <div className="mx-auto max-w-lg rounded-3xl border border-red-200 bg-white p-8 text-center shadow-xl">
+    return shell(
+      <div className="rounded-3xl border border-red-200 bg-white p-8 text-center shadow-2xl">
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600">
           <XCircle className="h-7 w-7" />
         </div>
         <h2 className="font-display text-xl font-bold text-slate-900">Application Rejected</h2>
         <p className="mt-2 text-sm text-slate-500">
-          Your KYC submission was rejected by an administrator. Please contact support or re-register
-          with corrected documents.
+          Your KYC was rejected by an administrator. Please contact support or re-register with
+          corrected documents.
         </p>
-      </div>
+        <Button className="mt-6 w-full" variant="outline" onClick={goResume}>
+          Return to registration
+        </Button>
+      </div>,
     );
   }
 
-  return (
-    <div className="mx-auto max-w-lg rounded-3xl border border-amber-200 bg-white p-8 text-center shadow-xl">
-      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 animate-pulse">
-        <ShieldAlert className="h-7 w-7" />
-      </div>
-      <h2 className="font-display text-xl font-bold text-slate-900">Waiting for Admin Approval</h2>
-      <p className="mt-2 text-sm text-slate-500">
-        Your complete signup profile and KYC photos are under review. This screen will open your
-        dashboard automatically when an admin approves you.
-      </p>
-      <div className="mt-6 space-y-2 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-left font-mono text-[11px]">
-        <div className="flex items-center gap-2 text-emerald-600">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          <span>Signup + KYC payload submitted</span>
+  if (stage === "needs_profile") {
+    const label = ROLE_PROFILE_LABEL[role];
+    return shell(
+      <div className="rounded-3xl border border-amber-200 bg-white p-8 text-center shadow-2xl">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+          <FileText className="h-7 w-7" />
         </div>
-        <div className="flex items-center gap-2 text-amber-600 animate-pulse">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          <span>kycStatus: pending · isApproved: false</span>
-        </div>
-      </div>
-      {email ? (
-        <p className="mt-4 text-xs text-slate-400">
-          Confirmation will be sent to <span className="font-semibold text-slate-700">{email}</span>
+        <h2 className="font-display text-xl font-bold text-slate-900">{label} Incomplete</h2>
+        <p className="mt-2 text-sm text-slate-500">
+          Your profile details are not finished yet. Complete Stage 2 to continue.
         </p>
-      ) : null}
-      <button
-        type="button"
-        disabled
-        className="mt-6 w-full cursor-not-allowed rounded-full bg-slate-200 py-3 text-sm font-bold text-slate-500"
-      >
-        Done, wait for admin approval
-      </button>
-    </div>
+        <Button
+          type="button"
+          onClick={goResume}
+          className="mt-6 w-full gap-2 bg-amber-500 text-white hover:bg-amber-600 font-bold"
+        >
+          Continue {label}
+          <ArrowRight className="h-4 w-4" />
+        </Button>
+      </div>,
+    );
+  }
+
+  return shell(
+    <div className="rounded-3xl border border-emerald-200 bg-white p-8 text-center shadow-2xl">
+      <Loader2 className="mx-auto h-8 w-8 animate-spin text-emerald-500" />
+      <p className="mt-3 text-sm font-semibold text-emerald-700">Opening dashboard…</p>
+    </div>,
   );
 }

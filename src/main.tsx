@@ -1,3 +1,4 @@
+import { startEntrepreneurSpotlightSync } from "./services/entrepreneurSpotlightService";
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
@@ -17,8 +18,12 @@ function App() {
     repairAppState();
     void syncPlatformStatsToRtdb();
 
+    let stopSpotlight: (() => void) | undefined;
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      stopSpotlight?.();
+      stopSpotlight = undefined;
       if (user) {
+        void startEntrepreneurSpotlightSync(user.uid).then(stop => { if (auth.currentUser?.uid === user.uid) stopSpotlight = stop; else stop(); });
         const lastSeen = Date.now();
         // Founders: touch only founders/{uid}/profile — never recreate users/user_directory
         get(ref(database, `founders/${user.uid}/profile`))
@@ -42,7 +47,7 @@ function App() {
       }
     });
 
-    return () => unsubscribe();
+    return () => { stopSpotlight?.(); unsubscribe(); };
   }, []);
 
   return <RouterProvider router={router} />;

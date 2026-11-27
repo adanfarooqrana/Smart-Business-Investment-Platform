@@ -1,9 +1,10 @@
+import { BrandLogo } from "@/components/BrandLogo";
 import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Outlet, Link, createRootRouteWithContext, useRouter, useRouterState } from "@tanstack/react-router";
 import { AuthProvider } from "../contexts/AuthContext";
 import { OrbitLaunchTransition } from "@/components/ui/OrbitLaunchTransition";
-import { Sparkles, Briefcase, TrendingUp, Boxes, ShieldAlert, KeyRound } from "lucide-react";
+import { Briefcase, TrendingUp, Boxes, ShieldAlert, KeyRound } from "lucide-react";
 
 function NotFoundComponent() {
   return (
@@ -69,7 +70,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function getLoaderConfig(pathname: string) {
-  if (pathname === "/") return { label: "Loading SmartBiz...", accent: "#f59e0b", icon: Sparkles };
+  if (pathname === "/") return { label: "Loading InvestBiz...", accent: "#f59e0b", icon: BrandLogo };
   if (pathname.includes("/register")) return { label: "Opening Registration...", accent: "#f59e0b", icon: KeyRound };
   if (pathname.includes("/login")) return { label: "Opening Sign In...", accent: "#f59e0b", icon: KeyRound };
   if (pathname.includes("/admin")) return { label: "Opening Admin Panel...", accent: "#ef4444", icon: ShieldAlert };

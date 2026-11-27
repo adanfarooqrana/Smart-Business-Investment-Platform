@@ -371,7 +371,7 @@ export function InvestorFounderMessenger({
               <Textarea
                 value={investorConcern}
                 onChange={(e) => setInvestorConcern(e.target.value)}
-                placeholder="Explain your issue in detail. Sent in SmartBiz official format to the entrepreneur."
+                placeholder="Explain your issue in detail. Sent in InvestBiz official format to the entrepreneur."
                 rows={4}
                 className="mt-1 rounded-xl text-sm"
               />

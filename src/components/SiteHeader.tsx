@@ -1,7 +1,7 @@
+import { BrandLogo } from "@/components/BrandLogo";
 import { Link } from "@tanstack/react-router";
-import { Sparkles, Home, Bot, TrendingUp, DollarSign, Boxes } from "lucide-react";
+import { Home, Bot, TrendingUp, DollarSign, Boxes } from "lucide-react";
 import { useState } from "react";
-import Dock from "@/components/ui/Dock";
 import RedditCommunityModal from "@/components/RedditCommunityModal";
 
 export function SiteHeader() {
@@ -10,92 +10,42 @@ export function SiteHeader() {
 
   const handleNavClick = (id: string) => {
     setActiveTab(id);
-    
-    if (id === "home") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } else if (id === "consultant") {
-      // Find guest advisor section
-      const element = document.querySelector('section.relative.overflow-hidden.border-b');
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    } else if (id === "wholesale") {
-      const element = document.getElementById("wholesale");
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    } else if (id === "investing") {
-      // Find the circular stepper section
-      const element = document.getElementById("how") || document.querySelector('section.bg-slate-50\\/50');
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    } else if (id === "pricing") {
-      // Find values/pricing section
-      const element = document.querySelector('section.mx-auto.max-w-7xl.px-6.py-32');
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    }
+    if (id === "home") { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    document.getElementById(id === "consultant" ? "ai-investment-agent" : id === "investing" ? "how" : id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
-
   const dockItems = [
-    {
-      icon: <Home />,
-      label: "Home",
-      onClick: () => handleNavClick("home")
-    },
-    {
-      icon: <Bot />,
-      label: "AI Consultant",
-      onClick: () => handleNavClick("consultant")
-    },
-    {
-      icon: <Boxes />,
-      label: "Wholesale",
-      onClick: () => handleNavClick("wholesale")
-    },
-    {
-      icon: <TrendingUp />,
-      label: "Investing",
-      onClick: () => handleNavClick("investing")
-    },
-    {
-      icon: <DollarSign />,
-      label: "Pricing",
-      onClick: () => handleNavClick("pricing")
-    }
+    { id: "home", icon: <Home />, label: "Home" },
+    { id: "consultant", icon: <Bot />, label: "AI Salesperson" },
+    { id: "wholesale", icon: <Boxes />, label: "Wholesale" },
+    { id: "investing", icon: <TrendingUp />, label: "Investing" },
+    { id: "pricing", icon: <DollarSign />, label: "Pricing" },
+    { id: "feedback", icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M4 4h16v12H10l-6 4V4Z" strokeLinejoin="round" /><path d="M8 8h8m-8 4h5" strokeLinecap="round" /></svg>, label: "Feedback" },
   ];
 
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-slate-200/60 bg-white/70 backdrop-blur-xl transition-all duration-300">
-        <div className="mx-auto flex h-20 max-w-[1600px] w-[95%] items-center justify-between px-5">
+      <header className="ib-site-header sticky top-0 z-50 border-b border-slate-200/60 bg-white/70 backdrop-blur-xl transition-all duration-300">
+        <div className="ib-header-inner mx-auto flex h-20 max-w-[1600px] w-[95%] items-center justify-between px-5">
           
           {/* Brand Logo */}
           <Link to="/" className="flex items-center gap-2.5 shrink-0">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500 shadow-sm shadow-amber-500/10">
-              <Sparkles className="h-4.5 w-4.5 text-white" />
-            </div>
+            <BrandLogo className="h-11 w-11" />
             <span className="font-display text-lg font-bold tracking-tight text-slate-900">
-              Smart Business <span className="text-slate-400">AI</span>
+              InvestBiz
             </span>
           </Link>
 
           {/* Modern High-Fidelity Dock inline in the header */}
-          <div className="hidden md:block">
-            <Dock 
-              items={dockItems} 
-              className="dock-inline"
-              panelHeight={56} 
-              baseItemSize={42} 
-              magnification={58} 
-              dockHeight={76}
-            />
+          <div className="ib-header-navcontainer">
+            <nav className="ib-nav" aria-label="Landing navigation">
+              {dockItems.map(item => <a key={item.id} href={item.id === "home" ? "#top" : "#" + (item.id === "consultant" ? "ai-investment-agent" : item.id === "investing" ? "how" : item.id)}
+                title={item.label} aria-current={activeTab === item.id ? "location" : undefined}
+                onClick={event => { event.preventDefault(); handleNavClick(item.id); }}>{item.icon}<span>{item.label}</span></a>)}
+            </nav>
           </div>
 
           {/* CTA Buttons */}
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="ib-header-actions flex items-center gap-3 shrink-0">
             {/* Join Community Button styled as white background, black text */}
             <Link
               to="/app/community"

@@ -33,7 +33,7 @@ export type FirestoreCommunityPost = {
   authorEmail?: string;
   businessName?: string;
   authorRole: FirestoreAuthorRole;
-  badge: "Business Owner" | "Founder" | "Investor";
+  badge: "Business Owner" | "Founder" | "Entrepreneur" | "Investor";
   proofAttachment?: string;
   likes: string[];
   shares: number;
@@ -175,7 +175,7 @@ async function mirrorPostToRtdb(
       businessName: payload.businessName ?? null,
       role: mapRtdbRole(authorRole),
       authorRole,
-      badge: payload.badge ?? "Founder",
+      badge: payload.badge ?? "Entrepreneur",
       proofAttachment: payload.proofAttachment ?? null,
       isMarketingBlueprint: Boolean(payload.isMarketingBlueprint),
       isPackagingReq: Boolean(payload.isPackagingReq),
@@ -310,7 +310,7 @@ export async function createFirestorePost(input: {
   authorEmail?: string;
   businessName?: string;
   authorRole: FirestoreAuthorRole;
-  badge: "Business Owner" | "Founder" | "Investor";
+  badge: "Business Owner" | "Founder" | "Entrepreneur" | "Investor";
   proofAttachment?: string;
   isMarketingBlueprint?: boolean;
   isPackagingReq?: boolean;
@@ -501,6 +501,28 @@ export async function deleteFirestorePost(postId: string, authorUid: string, req
   }
 }
 
+/** Wipe all Community Lounge posts (Firestore `posts` + RTDB `community_posts`). */
+export async function purgeAllCommunityFeed(): Promise<number> {
+  let deleted = 0;
+  try {
+    const snap = await getDocs(collection(firestore, POSTS));
+    const jobs: Promise<void>[] = [];
+    snap.forEach((d) => {
+      deleted += 1;
+      jobs.push(deleteDoc(d.ref));
+    });
+    await Promise.all(jobs);
+  } catch (err) {
+    console.warn("Firestore posts purge failed:", err);
+  }
+  try {
+    await remove(ref(database, RTDB.communityPosts));
+  } catch (err) {
+    console.warn("RTDB community_posts purge failed:", err);
+  }
+  return deleted;
+}
+
 export function mapAuthorRoleFromCommunity(
   userRole: string,
   authRole?: string | null,
@@ -520,10 +542,10 @@ export function mapAuthorRoleFromCommunity(
 
 export function mapBadgeFromAuthorRole(
   role: FirestoreAuthorRole,
-): "Business Owner" | "Founder" | "Investor" {
+): "Business Owner" | "Founder" | "Entrepreneur" | "Investor" {
   if (role === "business_owner") return "Business Owner";
   if (role === "investor") return "Investor";
-  return "Founder";
+  return "Entrepreneur";
 }
 
 export function resolveAuthorDisplayName(opts: {
@@ -539,7 +561,7 @@ export function resolveAuthorDisplayName(opts: {
   if (business) return business;
   const emailName = String(opts.email || "").split("@")[0];
   if (emailName) return emailName;
-  return opts.role === "business_owner" ? "Business Owner" : "Founder";
+  return opts.role === "business_owner" ? "Business Owner" : "Entrepreneur";
 }
 
 /** One-shot fetch (debug / landing). */

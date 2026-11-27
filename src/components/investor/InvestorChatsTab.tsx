@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
-import { MessageCircle, Send, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { MessageCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   streamInvestorChatThreads,
@@ -10,6 +8,12 @@ import {
   type InvestorChatThread,
   type ChatMessageNode,
 } from "@/services/investorCoreService";
+import {
+  ChatAttachmentComposer,
+  ChatMessageAttachments,
+  formatChatMessageTime,
+  isChatPlaceholderText,
+} from "@/components/chat/ChatAttachmentComposer";
 
 type InvestorChatsTabProps = {
   investorName: string;
@@ -64,8 +68,16 @@ export function InvestorChatsTab({ investorName }: InvestorChatsTabProps) {
     }
   }, [active?.channelId, active?.pitchId, active?.investorId, active?.founderId, investorId]);
 
-  const handleSend = async () => {
-    if (!active || !draft.trim() || !investorId) return;
+  const handleSend = async (payload: {
+    text: string;
+    attachment?: { url: string; type: "image" | "document"; name: string };
+  }) => {
+    if (!active || !investorId) {
+      throw new Error("No active chat selected.");
+    }
+    if (!payload.text.trim() && !payload.attachment?.url) {
+      throw new Error("Write a message or attach a file.");
+    }
     setIsSubmitting(true);
     setError(null);
     try {
@@ -74,19 +86,22 @@ export function InvestorChatsTab({ investorName }: InvestorChatsTabProps) {
         active.investorId,
         active.founderId,
         investorId,
-        draft.trim(),
+        payload.text.trim(),
         "General",
         {
           senderName: investorName || "Investor",
           founderName: active.founderName || "",
           startupTitle: active.startupTitle || active.pitchId,
           investorName: investorName || "",
+          attachmentUrl: payload.attachment?.url,
+          attachmentType: payload.attachment?.type,
+          attachmentName: payload.attachment?.name,
         },
       );
-      setDraft("");
     } catch (err) {
       console.error("InvestorChatsTab send error:", err);
-      setError("Failed to send message. Please try again.");
+      setError(err instanceof Error ? err.message : "Failed to send message. Please try again.");
+      throw err;
     } finally {
       setIsSubmitting(false);
     }
@@ -155,23 +170,45 @@ export function InvestorChatsTab({ investorName }: InvestorChatsTabProps) {
           ) : (
             messages.map((m) => {
               const mine = m.senderId === investorId;
+              const isPlaceholder = isChatPlaceholderText(m.text);
+              const showText = Boolean(m.text) && !isPlaceholder;
+              const timeLabel = formatChatMessageTime(m.timestamp);
               return (
                 <div
                   key={m.messageId}
                   className={`flex ${mine ? "justify-end" : "justify-start"}`}
                 >
-                  <div
-                    className={`max-w-[80%] rounded-2xl px-3 py-2 text-xs ${
-                      mine
-                        ? "bg-gradient-to-br from-violet-500 to-indigo-600 text-white"
-                        : "bg-slate-100 text-slate-800"
-                    }`}
-                  >
-                    <p className="mb-0.5 text-[9px] font-bold opacity-70">
-                      {m.senderName || (mine ? investorName : "Founder")}
-                      {m.stageContext ? ` · ${m.stageContext}` : ""}
-                    </p>
-                    <p className="leading-relaxed whitespace-pre-wrap">{m.text}</p>
+                  <div className={`max-w-[80%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
+                    <div
+                      className={`rounded-2xl px-3 py-2 text-xs ${
+                        mine
+                          ? "bg-gradient-to-br from-violet-500 to-indigo-600 text-white"
+                          : "bg-slate-100 text-slate-800"
+                      }`}
+                    >
+                      <p className="mb-0.5 text-[9px] font-bold opacity-70">
+                        {m.senderName || (mine ? investorName : "Founder")}
+                        {m.stageContext ? ` · ${m.stageContext}` : ""}
+                      </p>
+                      {showText ? (
+                        <p className="leading-relaxed whitespace-pre-wrap">{m.text}</p>
+                      ) : null}
+                      {!m.attachmentUrl && isPlaceholder ? (
+                        <p className="mt-0.5 text-[10px] opacity-80">
+                          Attachment missing — please resend the file.
+                        </p>
+                      ) : null}
+                      <ChatMessageAttachments message={m} mine={mine} />
+                    </div>
+                    {timeLabel ? (
+                      <p
+                        className={`mt-1 px-1 text-[9px] font-medium ${
+                          mine ? "text-right text-slate-400" : "text-left text-slate-400"
+                        }`}
+                      >
+                        {timeLabel}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               );
@@ -180,32 +217,16 @@ export function InvestorChatsTab({ investorName }: InvestorChatsTabProps) {
         </div>
 
         {active && (
-          <div className="border-t border-slate-100 p-3">
-            <Textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              rows={2}
-              placeholder="Write a reply to the founder…"
-              className="mb-2 text-xs"
-            />
-            {error && <p className="mb-2 text-xs font-semibold text-red-500">{error}</p>}
-            <Button
-              size="sm"
-              disabled={isSubmitting || !draft.trim()}
-              onClick={() => void handleSend()}
-              className="rounded-full bg-violet-600 hover:bg-violet-700"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Sending…
-                </>
-              ) : (
-                <>
-                  <Send className="mr-1.5 h-3.5 w-3.5" /> Send Reply
-                </>
-              )}
-            </Button>
-          </div>
+          <ChatAttachmentComposer
+            draft={draft}
+            onDraftChange={setDraft}
+            placeholder="Write a reply to the founder…"
+            sending={isSubmitting}
+            error={error}
+            sendLabel="Send Reply"
+            accentClassName="rounded-full bg-violet-600 hover:bg-violet-700"
+            onSend={handleSend}
+          />
         )}
       </section>
     </div>

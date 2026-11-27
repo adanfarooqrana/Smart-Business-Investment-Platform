@@ -1,4 +1,5 @@
-import { useNavigate } from "@tanstack/react-router";
+import { OpenChunkIdeas, type MarketProduct } from "@/components/investor/InvestorMarketplace";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   TrendingUp,
@@ -6,15 +7,17 @@ import {
   Shield,
   Scale,
   User,
+  Landmark,
   Sun,
   MessageSquare,
   Send,
   Loader2,
   CheckCircle2,
+  Building2,
   type LucideIcon,
 } from "lucide-react";
 import type { InvestorProfile } from "@/hooks/useAppState";
-import { STARTUP_IDEAS, type StartupIdea, isFounderPitchedIdea } from "@/data/startupIdeas";
+import { STARTUP_IDEAS, type StartupIdea } from "@/data/startupIdeas";
 import { formatPkr } from "@/lib/investmentCalculator";
 import { InvestorFeedSunHero } from "@/components/investor/InvestorFeedSunHero";
 import { sendInvestorQueryToFounder } from "@/services/founderFirebaseService";
@@ -52,7 +55,7 @@ function resolveFounderId(idea: StartupIdea): string {
 function openInvestorJourney(
   navigate: ReturnType<typeof useNavigate>,
   idea: StartupIdea,
-  stage: 1 | 2 | 3 = 1,
+  stage: 1 | 2 | 3 | 4 = 1,
 ) {
   try {
     const founderId = resolveFounderId(idea);
@@ -87,22 +90,30 @@ type InvestorIdeasFeedProps = {
   onSearchInteract?: () => void;
   ideas: StartupIdea[];
   liveFounderCount?: number;
-  loadingLive?: boolean;
+  chunkIdeas?: MarketProduct[];
+  catalogError?: string;
+  retryCatalog?: () => Promise<void>;
 };
 
 export function InvestorIdeasFeed({
   investor,
-  searchQuery,
+  searchQuery: searchInput,
   onSearchChange,
   onSearchInteract,
-  ideas,
+  ideas: ideaRows,
   liveFounderCount = 0,
-  loadingLive = false,
+  chunkIdeas: chunkRows,
+  catalogError,
+  retryCatalog,
 }: InvestorIdeasFeedProps) {
   const { currentUser } = useAuth();
+  const searchQuery = typeof searchInput === "string" ? searchInput : "";
+  const ideas = Array.isArray(ideaRows) ? ideaRows.filter((idea) => typeof idea?.id === "string") : [];
+  const chunkIdeas = Array.isArray(chunkRows) ? chunkRows.filter((idea) => typeof idea?.id === "string") : [];
   const [animEpoch, setAnimEpoch] = useState(0);
   const prevQuery = useRef(searchQuery);
   const [activeMessageIdea, setActiveMessageIdea] = useState<StartupIdea | null>(null);
+  const [activeViewIdea, setActiveViewIdea] = useState<StartupIdea | null>(null);
   /** Pitch IDs with pending or approved payment_desk / transaction rows for this investor */
   const [investedPitchIds, setInvestedPitchIds] = useState<Set<string>>(() => new Set());
 
@@ -117,7 +128,7 @@ export function InvestorIdeasFeed({
     let uid = "";
     try {
       uid = String(
-        peekActiveInvestorUid() || auth.currentUser?.uid || currentUser?.uid || "",
+        currentUser?.uid || auth.currentUser?.uid || peekActiveInvestorUid() || "",
       ).trim();
     } catch {
       uid = "";
@@ -160,25 +171,22 @@ export function InvestorIdeasFeed({
         searchQuery={searchQuery}
         onSearchChange={onSearchChange}
         onSearchInteract={onSearchInteract}
-        ideaCount={ideas.length}
+        ideaCount={ideas.length + chunkIdeas.length}
         liveFounderCount={liveFounderCount}
       />
 
-      {(liveFounderCount > 0 || loadingLive) && (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 py-2.5 text-center">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-          <p className="text-xs font-semibold text-emerald-800">
-            {loadingLive && liveFounderCount === 0
-              ? "Connecting to real founder pitches from Firebase…"
-              : `${liveFounderCount} live founder pitch${liveFounderCount === 1 ? "" : "es"} from backend — Stage 1 · 2 · 3 ready`}
-          </p>
-        </div>
-      )}
+      <Link to="/app/investor" search={{ view: "founders" }}
+        className="self-start rounded-full bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-950 md:hidden">
+        Explore Founders
+      </Link>
+      {catalogError && <p role="alert" className="rounded-lg bg-orange-50 p-3 text-sm text-orange-950">
+        {catalogError}{" "}{retryCatalog && <button type="button" className="font-semibold underline" onClick={() => void retryCatalog()}>Retry catalog</button>}
+      </p>}
 
       {/* Feed — real founder dossier grid */}
       <div className="rounded-2xl border border-slate-200/80 bg-white p-2 shadow-sm">
-        <div className="investor-feed-scroll investor-planet-stage max-h-[calc(100vh-20rem)] overflow-y-auto px-2 py-3 sm:px-3">
-          {ideas.length === 0 ? (
+        <div className="investor-feed-scroll investor-planet-stage space-y-5 px-2 py-3 sm:px-3">
+          {ideas.length === 0 && chunkIdeas.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in zoom-in-95 duration-500">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-orange-100/80 text-orange-600 border border-orange-200/80 shadow-inner">
                 <span className="text-3xl animate-bounce">🌱</span>
@@ -202,15 +210,17 @@ export function InvestorIdeasFeed({
                   isFiltered={!!searchQuery.trim()}
                   hasInvested={investedPitchIds.has(String(idea.id || "").trim())}
                   onOpenMessage={(selectedIdea) => setActiveMessageIdea(selectedIdea)}
+                  onOpenViewBusiness={(selectedIdea) => setActiveViewIdea(selectedIdea)}
                 />
               ))}
             </div>
           )}
+          {chunkIdeas.length > 0 && <OpenChunkIdeas items={chunkIdeas} />}
         </div>
       </div>
 
       <p className="text-center text-[10px] font-medium uppercase tracking-widest text-slate-400">
-        {ideas.length} live dossier{ideas.length === 1 ? "" : "s"} · click to open full 3-stage journey
+        {ideas.length} live dossier{ideas.length === 1 ? "" : "s"} · click to open four-stage dossier
       </p>
 
       {/* Send Message Dialog */}
@@ -220,6 +230,10 @@ export function InvestorIdeasFeed({
           investor={investor}
           onClose={() => setActiveMessageIdea(null)}
         />
+      )}
+
+      {activeViewIdea && (
+        <ViewBusinessModal idea={activeViewIdea} onClose={() => setActiveViewIdea(null)} />
       )}
     </div>
   );
@@ -231,12 +245,14 @@ function DossierCard({
   isFiltered,
   hasInvested,
   onOpenMessage,
+  onOpenViewBusiness,
 }: {
   idea: StartupIdea;
   index: number;
   isFiltered: boolean;
   hasInvested: boolean;
   onOpenMessage: (idea: StartupIdea) => void;
+  onOpenViewBusiness: (idea: StartupIdea) => void;
 }) {
   const navigate = useNavigate();
   const title = String(idea.stage1?.ideaTitle ?? idea.startupTitle ?? "").trim();
@@ -252,7 +268,6 @@ function DossierCard({
     equityPct > 0 ? `${equityPct}%` : String(idea.stage1?.equityOffered ?? "").trim();
   const verificationScore = Number(idea.stage2?.founderBackground?.verificationScore ?? 0) || 0;
   const gradient = INDUSTRY_GRADIENTS[category] ?? "from-slate-600 to-slate-800";
-  const isLive = isFounderPitchedIdea(idea);
 
   return (
     <div
@@ -271,14 +286,10 @@ function DossierCard({
                 {category}
               </span>
             ) : null}
-            {isLive && (
-              <span className="inline-block rounded-full bg-emerald-400/30 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-50 ring-1 ring-emerald-200/40">
-                Live · Founder DB
-              </span>
-            )}
           </div>
           <h3 className="mt-3 font-display text-xl font-extrabold leading-tight tracking-tight">
-            {title}
+            <Link to="/app/investor/idea/$ideaId" params={{ ideaId: idea.id }} search={{ founderId: resolveFounderId(idea) || undefined, stage: 1 }}
+              className="hover:underline focus-visible:underline">{title}</Link>
           </h3>
           {idea.founderName ? (
             <p className="mt-1.5 flex items-center gap-1.5 text-xs text-white/80">
@@ -310,27 +321,34 @@ function DossierCard({
             <p className="line-clamp-2 text-sm leading-relaxed text-slate-600">{description}</p>
           ) : null}
 
-          <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <StagePill
               icon={Sun}
               label="Stage 1"
-              sub="Idea & Terms"
+              sub="Showcase"
               color="slate"
               onClick={() => openInvestorJourney(navigate, idea, 1)}
             />
             <StagePill
               icon={Scale}
               label="Stage 2"
-              sub="Finance"
+              sub="Samples"
               color="amber"
               onClick={() => openInvestorJourney(navigate, idea, 2)}
             />
             <StagePill
               icon={Shield}
               label="Stage 3"
-              sub="Legal & Pay"
+              sub="Allocation & signing"
               color="emerald"
               onClick={() => openInvestorJourney(navigate, idea, 3)}
+            />
+            <StagePill
+              icon={Landmark}
+              label="Stage 4"
+              sub="Escrow"
+              color="amber"
+              onClick={() => openInvestorJourney(navigate, idea, 4)}
             />
           </div>
         </div>
@@ -354,7 +372,17 @@ function DossierCard({
             ) : null}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onOpenViewBusiness(idea)}
+              className="rounded-full border-amber-300 bg-amber-50 text-xs font-semibold text-amber-800 hover:border-amber-400 hover:bg-amber-100"
+            >
+              <Building2 className="mr-1.5 h-3.5 w-3.5" />
+              View Business
+            </Button>
+
             <Button
               size="sm"
               variant="outline"
@@ -387,6 +415,132 @@ function DossierCard({
         </div>
       </div>
     </div>
+  );
+}
+
+function ViewBusinessModal({
+  idea,
+  onClose,
+}: {
+  idea: StartupIdea;
+  onClose: () => void;
+}) {
+  const title = String(idea.stage1?.ideaTitle ?? idea.startupTitle ?? "").trim();
+  const category = String(idea.stage1?.categoryIndustry ?? idea.industry ?? "").trim();
+  const description = String(
+    idea.stage1?.ideaDescription ??
+      idea.stage1?.coreProblemSolution ??
+      idea.description ??
+      "",
+  ).trim();
+  const raisePkr =
+    Number(idea.stage1?.requiredInvestmentPkr ?? idea.stage2?.totalCapitalRequiredPkr ?? 0) || 0;
+  const valuationPkr = Number(idea.stage2?.currentValuationPkr ?? 0) || 0;
+  const roiPct = Number(idea.stage1?.expectedRoiPercent ?? 0) || 0;
+  const equityPct = Number(idea.stage1?.equityOfferedPercent ?? 0) || 0;
+  const roiLabel =
+    roiPct > 0 ? `${roiPct}%` : String(idea.stage1?.expectedRoi ?? "").trim() || "—";
+  const equityLabel =
+    equityPct > 0 ? `${equityPct}%` : String(idea.stage1?.equityOffered ?? "").trim() || "—";
+  const location = String(idea.stage2?.marketInsight?.location ?? "").trim();
+  const customers = String(idea.stage2?.customerBaseSize ?? "").trim();
+  const experience = Number(idea.stage2?.founderBackground?.yearsExperience ?? 0) || 0;
+  const education = String(idea.stage2?.founderBackground?.education ?? "").trim();
+  const marketSummary = String(idea.stage2?.marketInsight?.marketSummary ?? "").trim();
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="font-display text-xl font-extrabold text-slate-900">
+            {title || "Business details"}
+          </DialogTitle>
+          <DialogDescription className="text-xs text-slate-500">
+            Quick overview of this founder pitch
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 text-sm">
+          <div className="flex flex-wrap gap-2">
+            {category ? (
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                {category}
+              </span>
+            ) : null}
+            {idea.founderName ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-800">
+                <User className="h-3 w-3" />
+                {idea.founderName}
+              </span>
+            ) : null}
+          </div>
+
+          {description ? (
+            <p className="leading-relaxed text-slate-600">{description}</p>
+          ) : (
+            <p className="text-slate-400">No description provided yet.</p>
+          )}
+
+          <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Investment needed</p>
+              <p className="mt-0.5 font-bold text-slate-900">
+                {raisePkr > 0 ? formatPkr(raisePkr) : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Equity offered</p>
+              <p className="mt-0.5 font-bold text-slate-900">{equityLabel}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Expected return</p>
+              <p className="mt-0.5 font-bold text-slate-900">{roiLabel}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Business value</p>
+              <p className="mt-0.5 font-bold text-slate-900">
+                {valuationPkr > 0 ? formatPkr(valuationPkr) : "—"}
+              </p>
+            </div>
+          </div>
+
+          {(location || customers || experience > 0 || education || marketSummary) && (
+            <div className="space-y-2 rounded-xl border border-slate-100 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">More details</p>
+              {location ? (
+                <p className="text-xs text-slate-600">
+                  <span className="font-semibold text-slate-800">Location:</span> {location}
+                </p>
+              ) : null}
+              {customers ? (
+                <p className="text-xs text-slate-600">
+                  <span className="font-semibold text-slate-800">Customers:</span> {customers}
+                </p>
+              ) : null}
+              {experience > 0 ? (
+                <p className="text-xs text-slate-600">
+                  <span className="font-semibold text-slate-800">Founder experience:</span> {experience} years
+                </p>
+              ) : null}
+              {education ? (
+                <p className="text-xs text-slate-600">
+                  <span className="font-semibold text-slate-800">Education:</span> {education}
+                </p>
+              ) : null}
+              {marketSummary ? (
+                <p className="text-xs leading-relaxed text-slate-600">{marketSummary}</p>
+              ) : null}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} className="rounded-full">
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -558,22 +712,12 @@ function StagePill({
   );
 }
 
-export function filterStartupIdeas(ideas: StartupIdea[], query: string): StartupIdea[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return ideas;
-  return ideas.filter((idea) => {
-    const title = (idea.stage1?.ideaTitle || idea.startupTitle || "").toLowerCase();
-    const founder = (idea.founderName || "").toLowerCase();
-    const industry = (idea.stage1?.categoryIndustry || idea.industry || "").toLowerCase();
-    const desc = (idea.stage1?.ideaDescription || idea.description || "").toLowerCase();
-    const prodType = (idea.stage1?.productType || (idea as any).productType || "").toLowerCase();
-
-    return (
-      title.includes(q) ||
-      founder.includes(q) ||
-      industry.includes(q) ||
-      desc.includes(q) ||
-      prodType.includes(q)
-    );
-  });
+export function filterStartupIdeas(ideas: StartupIdea[] | null | undefined, query: string | null | undefined): StartupIdea[] {
+  const q = query?.trim().toLowerCase() ?? "";
+  const rows = Array.isArray(ideas) ? ideas : [];
+  return rows.filter((idea) => typeof idea?.id === "string" && (!q || [
+    idea.stage1?.ideaTitle, idea.startupTitle, idea.founderName,
+    idea.stage1?.categoryIndustry, idea.industry, idea.stage1?.ideaDescription,
+    idea.description, idea.stage1?.productType,
+  ].some((value) => typeof value === "string" && value.toLowerCase().includes(q))));
 }

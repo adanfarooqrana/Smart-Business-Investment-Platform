@@ -6,7 +6,7 @@ import type { PlatformStats } from "@/services/platformStatsService";
 
 const AUTO_DIALOGUE: { q: string; a: (s: PlatformStats) => string }[] = [
   {
-    q: "SmartBiz Grow kya hai?",
+    q: "InvestBiz Grow kya hai?",
     a: (s) =>
       `Yeh Pakistan ka AI business ecosystem hai — abhi ${s.totalMembers} members, ${s.investors} investors aur ${s.communityPosts} community strategies live hain.`,
   },
@@ -62,7 +62,7 @@ export function HeroAutoChatbot() {
           </div>
           <div>
             <p className="text-xs font-bold text-slate-900 flex items-center gap-1">
-              SmartBiz AI <Sparkles className="h-3 w-3 text-amber-500" />
+              InvestBiz AI <Sparkles className="h-3 w-3 text-amber-500" />
             </p>
             <p className="text-[9px] font-semibold uppercase tracking-wider text-violet-600">
               Auto Q&A · Live data

@@ -788,7 +788,7 @@ export function PitchIdeaWizard({
                 agreement text, sample product parameters, and optional agreement PDF.
               </p>
               <p className="text-xs text-slate-500">
-                Write your custom investment agreement, or leave blank to use the SmartBiz
+                Write your custom investment agreement, or leave blank to use the InvestBiz
                 auto-generated template (same as seeded investor dossiers via buildStage3For).
               </p>
 
@@ -822,7 +822,7 @@ export function PitchIdeaWizard({
                   className="flex min-h-[200px] w-full rounded-xl border border-input bg-transparent px-3 py-2 font-mono text-xs leading-relaxed shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#FFA500]"
                   value={agreementText}
                   onChange={(e) => setAgreementText(e.target.value)}
-                  placeholder={`SMARTBIZ GROW — INVESTMENT AGREEMENT\n\nFounder: ${founderName}\nVenture: ${ideaTitle || "[Your Idea Title]"}\n\n1. INVESTMENT TERMS\n   • Equity: ${equityPercent || "X"}%\n   • Capital: PKR ${investmentAmount || "X"}\n   • Expected ROI: ${roiPercent || "X"}%\n\n2. PROFIT SHARING\n   ...`}
+                  placeholder={`INVESTBIZ GROW — INVESTMENT AGREEMENT\n\nFounder: ${founderName}\nVenture: ${ideaTitle || "[Your Idea Title]"}\n\n1. INVESTMENT TERMS\n   • Equity: ${equityPercent || "X"}%\n   • Capital: PKR ${investmentAmount || "X"}\n   • Expected ROI: ${roiPercent || "X"}%\n\n2. PROFIT SHARING\n   ...`}
                 />
               </div>
 

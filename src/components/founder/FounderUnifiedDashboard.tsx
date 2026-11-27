@@ -1,3 +1,5 @@
+import { FounderDossierDesk } from "./FounderDossierDesk";
+import { PayoutAccountDialog } from "@/components/marketplace/PayoutAccountDialog";
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Rocket, MessageSquare, Sun, ShieldCheck, Landmark, ArrowRight, CheckCircle2, X, LogOut, Layout, BookOpen, CreditCard, Users, ClipboardCheck, FileText, ChevronDown, ChevronUp } from "lucide-react";
@@ -8,17 +10,15 @@ import { FounderCommunityLounge } from "./FounderCommunityLounge";
 import { CommunityErrorBoundary } from "./CommunityErrorBoundary";
 import { FounderGroupsPanel } from "./FounderGroupsPanel";
 import { CommunityProfileDrawer } from "./CommunityProfileDrawer";
-import { FounderProfilePanel } from "./FounderProfilePanel";
 import { SunGlowTransition } from "./SunGlowTransition";
 import { PaymentOTPModal } from "./PaymentOTPModal";
 
-import { PitchIdeaWizard } from "@/components/entrepreneur/PitchIdeaWizard";
+import { FounderPitchStudio } from "./FounderPitchStudio";
 import { FounderChatsPanel } from "@/components/founder/FounderChatsPanel";
 import { FounderPaymentDesk } from "@/components/founder/FounderPaymentDesk";
 import { useAppState } from "@/hooks/useAppState";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  publishCustomFounderPitch,
   triggerPayoutRequest,
   lockPayoutAsCompleted,
   updateSampleOrderStage,
@@ -116,12 +116,10 @@ export function FounderUnifiedDashboard({
   const [aiOpen, setAiOpen] = useState(false);
   const [profileUsername, setProfileUsername] = useState<string | null>(null);
   const [showPitchWizard, setShowPitchWizard] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
   const [sunGlow, setSunGlow] = useState<"none" | "community" | "profile">("none");
   const [paymentOpen, setPaymentOpen] = useState(false);
 
   const [editingIdeaId, setEditingIdeaId] = useState<string | null>(null);
-  const [editingInitialData, setEditingInitialData] = useState<any>(null);
   const [expandedIdeaId, setExpandedIdeaId] = useState<string | null>(null);
   const [payoutStatus, setPayoutStatus] = useState<"Pending" | "Delivered">("Pending");
   const [payoutStage, setPayoutStage] = useState<"initial" | "requested" | "proof_uploaded" | "completed">("initial");
@@ -373,7 +371,7 @@ export function FounderUnifiedDashboard({
       setActiveTab("community");
       setActiveView("community");
     }
-    if (sunGlow === "profile") setShowProfile(true);
+    if (sunGlow === "profile") void navigate({ to: "/founder/profile" });
     setSunGlow("none");
   };
 
@@ -405,100 +403,14 @@ export function FounderUnifiedDashboard({
   const createdCount = displayIdeas.length;
   const remainingCount = Math.max(0, 3 - createdCount);
 
-  const handlePitchSuccess = async (ideaId: string, updatedIdea?: any) => {
-    if (!activeUid) {
-      toast.error("Founder session missing. Please sign in again.");
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      const s1 = updatedIdea?.stage1 && typeof updatedIdea.stage1 === "object" ? updatedIdea.stage1 : {};
-      const s2 = updatedIdea?.stage2 && typeof updatedIdea.stage2 === "object" ? updatedIdea.stage2 : {};
-      const s3 = updatedIdea?.stage3 && typeof updatedIdea.stage3 === "object" ? updatedIdea.stage3 : {};
-
-      // Combine wizard multi-step state into rigid Stage 1 → 2 → 3 sequence
-      const formData = {
-        productType: String(updatedIdea?.productType || s1.productType || "Physical Product"),
-        stage1: {
-          ideaTitle: String(s1.ideaTitle || updatedIdea?.startupTitle || `Idea ${ideas.length + 1}`),
-          categoryIndustry: String(s1.categoryIndustry || updatedIdea?.industry || ideaInterest || "General"),
-          ideaDescription: String(s1.ideaDescription || updatedIdea?.description || ""),
-          productType: String(updatedIdea?.productType || s1.productType || "Physical Product"),
-          coreProblemSolution: String(s1.coreProblemSolution || ""),
-          requiredInvestmentPkr: Number(
-            s1.requiredInvestmentPkr ?? s2.totalCapitalRequiredPkr ?? 0,
-          ),
-          equityOfferedPercent: Number(
-            s1.equityOfferedPercent ?? s2.investmentFormula?.maxEquityPercent ?? 0,
-          ),
-          expectedRoiPercent: Number(
-            s1.expectedRoiPercent ??
-              (typeof s2.investmentFormula?.projectedAnnualReturnRate === "number"
-                ? s2.investmentFormula.projectedAnnualReturnRate * 100
-                : 0),
-          ),
-        },
-        stage2: {
-          productUrl: String(
-            s2.productUrl || s2.productLiveUrl || updatedIdea?.productLiveUrl || "N/A",
-          ),
-          existingCustomerBaseSize: String(
-            s2.existingCustomerBaseSize || s2.customerBaseSize || "",
-          ),
-          marketLocation: String(s2.marketLocation || s2.marketInsight?.location || ""),
-          yearsOfExperience: String(
-            s2.yearsOfExperience ?? s2.founderBackground?.yearsExperience ?? "",
-          ),
-          marketSummary: String(s2.marketSummary || s2.marketInsight?.marketSummary || ""),
-          sampleProductName: String(s2.sampleProductName || s3.sampleProductName || "N/A"),
-          sampleProductPricePkr: Number(s2.sampleProductPricePkr ?? s3.sampleProductPricePkr ?? 0),
-        },
-        stage3: {
-          customAgreementText: String(
-            s3.customAgreementText || s3.legalAgreementText || "",
-          ),
-        },
-      };
-
-      const isEdit = Boolean(editingIdeaId && ideaId && editingIdeaId === ideaId);
-      const publishedId = await publishCustomFounderPitch(
-        activeUid,
-        isEdit ? ideaId : null,
-        formData,
-      );
-
-      const cardIdea = mapPitchToIdea({
-        pitchId: publishedId,
-        id: publishedId,
-        ideaTitle: formData.stage1.ideaTitle,
-        categoryIndustry: formData.stage1.categoryIndustry,
-        ideaDescription: formData.stage1.ideaDescription,
-        productType: formData.stage1.productType,
-        createdAt: Date.now(),
-        investorsViewedIdea: 0,
-        stage1: formData.stage1,
-        stage2: formData.stage2,
-        stage3: formData.stage3,
-      });
-
-      setIdeas((prev) => {
-        if (isEdit) {
-          return prev.map((i) => (i.id === ideaId || i.id === publishedId ? cardIdea : i));
-        }
-        const exists = prev.some((i) => i.id === publishedId);
-        if (exists) return prev.map((i) => (i.id === publishedId ? cardIdea : i));
-        return [...prev, cardIdea].slice(0, 3);
-      });
-      setShowPitchWizard(false);
-      setEditingIdeaId(null);
-      setEditingInitialData(null);
-      toast.success(isEdit ? "Venture data refreshed successfully." : `Idea ${Math.min(ideas.length + 1, 3)} published successfully!`);
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err?.message || "Failed to publish pitch.");
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handlePitchPublished = (raw: Record<string, unknown>) => {
+    const idea = mapPitchToIdea(raw);
+    setIdeas((previous) => previous.some((row) => row.id === idea.id)
+      ? previous.map((row) => row.id === idea.id ? idea : row)
+      : [...previous, idea]);
+    setShowPitchWizard(false);
+    setEditingIdeaId(null);
+    toast.success("Investor pitch published.");
   };
 
   const handleRequestPayout = async () => {
@@ -604,7 +516,7 @@ export function FounderUnifiedDashboard({
   };
 
   const sidebarMenu = [
-    { id: "workspace", label: "Founder Quote", icon: Layout },
+    { id: "workspace", label: "Entrepreneur Quote", icon: Layout },
     { id: "ideas", label: "Idea Configuration", icon: BookOpen },
     { id: "payout", label: "Cash Payout", icon: CreditCard },
     { id: "community", label: "Community Lounge", icon: Users },
@@ -640,19 +552,14 @@ export function FounderUnifiedDashboard({
         }
       `}</style>
 
-      {showPitchWizard && activeUid && (
-        <PitchIdeaWizard
-          entrepreneurUid={activeUid}
-          founderName={displayName}
-          onClose={() => setShowPitchWizard(false)}
-          onSuccess={handlePitchSuccess}
-        />
-      )}
+      {currentUser && (showPitchWizard || editingIdeaId) && <FounderPitchStudio
+        key={editingIdeaId || "new"} user={currentUser} idea={ideas.find((idea) => idea.id === editingIdeaId)}
+        onClose={() => { setShowPitchWizard(false); setEditingIdeaId(null); }} onPublished={handlePitchPublished} />}
 
       <SunGlowTransition
         active={sunGlow !== "none"}
         onComplete={onSunComplete}
-        label={sunGlow === "community" ? "Opening Community Lounge..." : "Opening Founder Profile..."}
+        label={sunGlow === "community" ? "Opening Community Lounge..." : "Opening Entrepreneur Profile..."}
       />
 
       <PaymentOTPModal
@@ -675,8 +582,8 @@ export function FounderUnifiedDashboard({
               <Sun className="h-5 w-5 text-slate-950" />
             </div>
             <div>
-              <span className="font-display font-black text-xl tracking-tight text-orange-500 block">Founder</span>
-              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Founder Suite</span>
+              <span className="font-display font-black text-xl tracking-tight text-orange-500 block">Entrepreneur</span>
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Entrepreneur Suite</span>
             </div>
           </div>
 
@@ -721,7 +628,7 @@ export function FounderUnifiedDashboard({
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-base font-bold text-white truncate leading-snug">{displayName}</p>
-              <p className="text-[11px] text-slate-400 truncate">{email || "founder@smartbiz.ai"}</p>
+              <p className="text-[11px] text-slate-400 truncate">{email || "entrepreneur@smartbiz.ai"}</p>
               <button
                 onClick={handleLogout}
                 className="text-red-400 hover:text-red-300 text-xs font-semibold block mt-0.5 transition"
@@ -736,6 +643,14 @@ export function FounderUnifiedDashboard({
       {/* Right Main Container (No top navbar wrapper) */}
       <div className="flex-1 min-h-screen bg-white">
         <main className="mx-auto max-w-[1300px] p-10">
+          {activeView === "dashboard" && <div className="mb-4 flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="outline" onClick={openProfile}>Founder profile</Button>
+            <PayoutAccountDialog />
+          </div>}
+          {activeView === "dashboard" && currentUser && <details open={activeTab === "samples" || activeTab === "messages"} className="mb-5 rounded-2xl border border-orange-200 bg-white p-4">
+            <summary className="cursor-pointer font-semibold text-orange-900">Investor dossiers, samples, agreements and chat</summary>
+            <div className="mt-4 overflow-hidden rounded-xl"><FounderDossierDesk key={currentUser.uid} user={currentUser} ideas={ideas} /></div>
+          </details>}
           {activeView === "community" ? (
             <CommunityErrorBoundary onReset={() => setActiveView("community")}>
               <FounderCommunityLounge
@@ -770,7 +685,7 @@ export function FounderUnifiedDashboard({
                   >
                     <div className="mb-6">
                       <p className="mb-1 text-xs font-bold uppercase tracking-widest text-[#FFD700]/70">
-                        Founder Command Center
+                        Entrepreneur Command Center
                       </p>
                       <h2 className="font-display text-3xl font-extrabold text-white">
                         Welcome back, <span style={{ background: "linear-gradient(90deg, #FFD700, #FFA500)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{displayName}</span>!
@@ -915,7 +830,6 @@ export function FounderUnifiedDashboard({
                             <button
                               onClick={() => {
                                 setEditingIdeaId(idea.id);
-                                setEditingInitialData(idea);
                               }}
                               className="text-xs text-amber-600 hover:text-amber-700 font-bold underline"
                             >
@@ -962,7 +876,7 @@ export function FounderUnifiedDashboard({
                           </div>
                           <div className="flex items-center gap-1.5 text-xs text-slate-600 font-bold bg-slate-50 p-2 rounded-xl border border-slate-200/60">
                             <span className="inline-block h-3.5 w-3.5 rounded-full bg-slate-200 flex items-center justify-center text-[8px] text-slate-600">👁</span>
-                            Investor Views: {meta.investorsViewedIdea ?? 0}
+                            Live reader counts are in the Investor pitch workspace.
                           </div>
                           <button
                             type="button"
@@ -1030,7 +944,7 @@ export function FounderUnifiedDashboard({
                     <div>
                       <h3 className="font-display text-lg font-black text-slate-900">Community Lounge</h3>
                       <p className="mt-2 text-xs text-slate-500 leading-relaxed">
-                        Engage with other founders, follow wholesalers, and connect with advisors to grow your business network.
+                        Engage with other entrepreneurs, follow wholesalers, and connect with advisors to grow your business network.
                       </p>
                     </div>
                     <Button
@@ -1135,19 +1049,6 @@ export function FounderUnifiedDashboard({
           isOpen={!!profileUsername}
           onClose={() => setProfileUsername(null)}
           isOwnProfile={profileUsername === founderUsername}
-        />
-      )}
-      {editingIdeaId && activeUid && (
-        <PitchIdeaWizard
-          entrepreneurUid={activeUid}
-          founderName={displayName}
-          editIdeaId={editingIdeaId}
-          initialData={editingInitialData}
-          onClose={() => {
-            setEditingIdeaId(null);
-            setEditingInitialData(null);
-          }}
-          onSuccess={handlePitchSuccess}
         />
       )}
     </div>

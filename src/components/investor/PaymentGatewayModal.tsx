@@ -383,7 +383,7 @@ export function PaymentGatewayModal({
 
               <ShieldCheck className="h-5 w-5" />
 
-              <DialogTitle className="font-display text-lg font-bold text-white">SmartBiz Escrow Payment</DialogTitle>
+              <DialogTitle className="font-display text-lg font-bold text-white">InvestBiz Escrow Payment</DialogTitle>
 
             </div>
 

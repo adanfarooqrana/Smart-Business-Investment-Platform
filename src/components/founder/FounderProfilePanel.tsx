@@ -91,7 +91,7 @@ export function FounderProfilePanel({
           <div className="flex-1">
             <div className="mb-2 flex flex-wrap justify-center gap-2 sm:justify-start">
               <span className="rounded-full bg-[#FFD700]/20 px-3 py-1 text-[10px] font-bold uppercase text-[#FFD700]">
-                Entrepreneur / Founder
+                Entrepreneur
               </span>
               {isVerified && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-1 text-[10px] font-bold text-emerald-400">

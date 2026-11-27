@@ -83,7 +83,7 @@ export function AiProfileBuilder({ onGenerate, accent = "amber", className = "" 
       base.charAt(0).toUpperCase() +
       base.slice(1) +
       (base.endsWith(".") ? "" : ".") +
-      " Verified supplier on SmartBiz · bulk-ready · quality guaranteed.";
+      " Verified supplier on InvestBiz · bulk-ready · quality guaranteed.";
     onGenerate(polished);
     setGenerated(true);
     setTimeout(() => setGenerated(false), 3000);

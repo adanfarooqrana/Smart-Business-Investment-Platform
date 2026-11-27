@@ -2,26 +2,84 @@
   "rules": {
     ".read": false,
     ".write": false,
-
-    "users": {
+    "entrepreneur_spotlights": {
+      ".read": true,
       "$uid": {
-        ".read": "auth != null && auth.uid == $uid",
-        ".write": "auth != null && auth.uid == $uid"
+        ".write": "auth != null && auth.uid == $uid",
+        ".validate": "newData.hasChildren(['fullName','startupName','amountRaised','hasPitched'])",
+        "$other": {
+          ".validate": false
+        },
+        "fullName": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
+        "startupName": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
+        "photoUrl": {
+          ".validate": "newData.isString() && newData.val().length <= 2048"
+        },
+        "activity": {
+          ".validate": "newData.isString() && newData.val().length <= 1000"
+        },
+        "idea": {
+          ".validate": "newData.isString() && newData.val().length <= 1000"
+        },
+        "amountRaised": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && (root.child('founders').child($uid).child('stats/totalFundingRaised').exists() ? newData.val() == root.child('founders').child($uid).child('stats/totalFundingRaised').val() : newData.val() == 0)"
+        },
+        "hasPitched": {
+          ".validate": "newData.isBoolean()"
+        }
       }
     },
-
-    "kyc_reviews": {
+    "startup_funding": {
       ".read": true,
-      ".write": true
+      "$uid": {
+        ".write": "auth != null && auth.uid == $uid",
+        ".validate": "newData.hasChildren(['name','amount'])",
+        "name": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200"
+        },
+        "amount": {
+          ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 50000 && newData.val() == root.child('founders').child($uid).child('stats/totalFundingRaised').val()"
+        },
+        "idea": {
+          ".validate": "newData.isString() && newData.val().length <= 1000"
+        },
+        "product": {
+          ".validate": "newData.isString() && newData.val().length <= 1000"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
     },
-
+    "users": {
+      "$uid": {
+        ".read": "(auth != null && auth.uid == $uid) || (auth != null && auth.token.admin == true && auth.token.email_verified == true)",
+        ".write": "auth != null && auth.uid == $uid",
+        "emailVerified": {
+          ".validate": "newData.isBoolean() && (newData.val() == false || auth.token.email_verified == true)"
+        },
+        "role": {
+          ".validate": "newData.isString() && (!data.exists() || newData.val() == data.val())"
+        }
+      }
+    },
+    "kyc_reviews": {
+      ".read": "auth != null && auth.token.admin == true && auth.token.email_verified == true",
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "(auth != null && auth.token.admin == true && auth.token.email_verified == true) || (auth != null && auth.uid == $uid && auth.token.email_verified == true && newData.child('uid').val() == $uid && newData.child('kycStatus').val() == 'pending' && newData.child('isApproved').val() == false && (!data.exists() || data.child('kycStatus').val() != 'approved'))"
+      }
+    },
     "entrepreneurs": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && auth.uid == $uid"
       }
     },
-
     "founders": {
       ".read": "auth != null",
       "$uid": {
@@ -50,13 +108,12 @@
         },
         "chat_index": {
           "$chatId": {
-            ".read": "auth != null && (auth.uid == $uid || data.child('investorId').val() == auth.uid || newData.child('investorId').val() == auth.uid)",
+            ".read": "auth != null && (auth.uid == $uid || data.child('investorId').val() == auth.uid)",
             ".write": "auth != null && (auth.uid == $uid || newData.child('investorId').val() == auth.uid || data.child('investorId').val() == auth.uid)"
           }
         }
       }
     },
-
     "investors": {
       "$uid": {
         ".read": "auth != null && (auth.uid == $uid || root.child('founders').child(auth.uid).exists())",
@@ -83,13 +140,12 @@
         },
         "chats": {
           "$chatId": {
-            ".read": "auth != null && (auth.uid == $uid || data.child('founderId').val() == auth.uid || newData.child('founderId').val() == auth.uid || root.child('founders').child(auth.uid).exists())",
+            ".read": "auth != null && (auth.uid == $uid || data.child('founderId').val() == auth.uid || root.child('founders').child(auth.uid).exists())",
             ".write": "auth != null && (auth.uid == $uid || data.child('founderId').val() == auth.uid || newData.child('founderId').val() == auth.uid)"
           }
         }
       }
     },
-
     "pitches": {
       "$pitchId": {
         ".read": "auth != null",
@@ -99,195 +155,199 @@
             ".write": "auth != null && (auth.uid == $investorId || root.child('founders').child(auth.uid).child('pitches').child($pitchId).exists() || data.child('founderId').val() == auth.uid)"
           }
         }
+      },
+      ".indexOn": [
+        "founderId"
+      ]
+    },
+    "chats": {
+      ".read": "auth != null && ((query.orderByChild == 'founderId' && query.equalTo == auth.uid) || (query.orderByChild == 'investorId' && query.equalTo == auth.uid))",
+      ".indexOn": [
+        "founderId",
+        "investorId"
+      ],
+      "$roomId": {
+        ".read": "auth != null && (data.child('investorId').val() == auth.uid || data.child('founderId').val() == auth.uid)",
+        ".write": "auth != null && !data.child('dossier').exists() && !newData.child('dossier').exists() && (!data.exists() || data.child('investorId').val() == auth.uid || data.child('founderId').val() == auth.uid) && (newData.child('investorId').val() == auth.uid || newData.child('founderId').val() == auth.uid) && (!data.exists() || (data.child('investorId').val() == newData.child('investorId').val() && data.child('founderId').val() == newData.child('founderId').val()))",
+        "messages": {
+          ".indexOn": [
+            "timestamp"
+          ],
+          "$messageId": {
+            ".write": "auth != null && root.child('chats').child($roomId).child('dossier').val() == true && (root.child('chats').child($roomId).child('investorId').val() == auth.uid || root.child('chats').child($roomId).child('founderId').val() == auth.uid) && !data.exists() && newData.exists() && newData.child('senderId').val() == auth.uid && newData.hasChildren(['senderId','text','timestamp'])",
+            "senderId": {
+              ".validate": "newData.isString()"
+            },
+            "text": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 4000"
+            },
+            "timestamp": {
+              ".validate": "root.child('chats').child($roomId).child('dossier').val() != true || (newData.isNumber() && newData.val() <= now + 5000 && newData.val() >= now - 300000)"
+            },
+            "$other": {
+              ".validate": "root.child('chats').child($roomId).child('dossier').val() != true"
+            }
+          }
+        }
       }
     },
-
-    "chats": {
-      ".read": "auth != null",
-      ".write": "auth != null"
-    },
-
     "wholesalers": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && auth.uid == $uid"
       }
     },
-
     "community_members": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && auth.uid == $uid"
       }
     },
-
     "community_posts": {
       ".read": true,
       "$postId": {
         ".write": "auth != null && ((!data.exists() && (root.child('business_owners').child(auth.uid).exists() || root.child('entrepreneurs').child(auth.uid).exists() || root.child('founders').child(auth.uid).exists() || root.child('investors').child(auth.uid).exists())) || (data.exists() && (root.child('business_owners').child(auth.uid).exists() || root.child('entrepreneurs').child(auth.uid).exists() || root.child('founders').child(auth.uid).exists() || root.child('investors').child(auth.uid).exists() || ((root.child('community_members').child(auth.uid).exists() || root.child('investors').child(auth.uid).exists() || root.child('wholesalers').child(auth.uid).exists() || root.child('business_owners').child(auth.uid).exists() || root.child('entrepreneurs').child(auth.uid).exists() || root.child('founders').child(auth.uid).exists()) && newData.child('title').val() == data.child('title').val() && newData.child('content').val() == data.child('content').val() && newData.child('author').val() == data.child('author').val() && (!data.hasChild('proofAttachment') || newData.child('proofAttachment').val() == data.child('proofAttachment').val())))))"
       }
     },
-
     "messages": {
       "$messageId": {
         ".read": "auth != null && (data.child('fromId').val() == auth.uid || data.child('toId').val() == auth.uid)",
         ".write": "auth != null && ((!data.exists() && newData.child('fromId').val() == auth.uid) || data.child('fromId').val() == auth.uid || (data.child('toId').val() == auth.uid && newData.child('read').val() == true))"
       }
     },
-
     "groups": {
       ".read": "auth != null",
       "$groupId": {
         ".write": "auth != null && (!data.exists() ? newData.child('createdBy').val() == auth.uid : data.child('createdBy').val() == auth.uid)"
       }
     },
-
     "group_messages": {
       "$groupId": {
         ".read": "auth != null",
         ".write": "auth != null"
       }
     },
-
     "sample_orders": {
-      ".indexOn": ["founderId", "investorId"],
+      ".indexOn": [
+        "founderId",
+        "investorId"
+      ],
       "$orderId": {
         ".read": "auth != null && (data.child('investorId').val() == auth.uid || data.child('founderId').val() == auth.uid)",
         ".write": "auth != null && ((!data.exists() && newData.child('investorId').val() == auth.uid) || (data.exists() && data.child('founderId').val() == auth.uid && newData.child('founderId').val() == auth.uid))"
       }
     },
-
     "payments": {
       "$paymentId": {
         ".read": "auth != null && (data.child('investorId').val() == auth.uid || data.child('founderId').val() == auth.uid)",
         ".write": "auth != null && newData.child('investorId').val() == auth.uid"
       }
     },
-
     "video_lounge": {
       ".read": "auth != null",
       ".write": "auth != null"
     },
-
     "notifications": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && auth.uid == $uid"
       }
     },
-
     "followers": {
       "$followerId": {
         ".read": "auth != null",
         ".write": "auth != null && newData.child('followerId').val() == auth.uid"
       }
     },
-
     "points": {
       "$userId": {
         ".read": "auth != null && auth.uid == $userId",
         ".write": "auth != null && auth.uid == $userId"
       }
     },
-
     "user_directory": {
       ".read": true,
       "$uid": {
         ".write": "auth != null && auth.uid == $uid"
       }
     },
-
     "platform_stats": {
       ".read": true,
-      ".write": true
+      ".write": "auth != null && auth.token.email_verified == true"
     },
-
     "landing_testimonials": {
       ".read": true,
-      ".write": true
+      ".write": "auth != null && auth.token.admin == true && auth.token.email_verified == true"
     },
-
     "investor_feed": {
       ".read": true,
       "$ideaId": {
         ".write": "auth != null && newData.child('entrepreneurUid').val() == auth.uid"
       }
     },
-
     "founder_problems": {
       ".read": "auth != null",
       "$problemId": {
         ".write": "auth != null && newData.child('founderId').val() == auth.uid"
       }
     },
-
     "registered_emails": {
       "$emailKey": {
         ".read": "auth != null",
         ".write": "!data.exists() && newData.hasChild('uid')"
       }
     },
-
     "registered_phones": {
       "$phoneKey": {
         ".read": "auth != null",
         ".write": "!data.exists() && newData.hasChild('uid')"
       }
     },
-
     "registered_cnics": {
       "$cnicKey": {
         ".read": "auth != null",
         ".write": "!data.exists() && newData.hasChild('uid')"
       }
     },
-
     "subdomains": {
       "$slug": {
         ".read": true,
         ".write": "auth != null && ((!data.exists() && newData.child('owner_uid').val() == auth.uid) || (data.exists() && data.child('owner_uid').val() == auth.uid))"
       }
     },
-
     "business_owners": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && auth.uid == $uid",
-
         "profile": {
           ".read": true
         },
-
         "website_settings": {
           ".read": true
         },
-
         "products": {
           ".read": true,
           "$productId": {
             ".write": "auth != null && auth.uid == $uid",
             "reviews": {
               "$reviewUid": {
-                ".write": "!data.exists() && newData.hasChildren(['customer_name', 'rating', 'review_text', 'timestamp']) && newData.child('customer_name').isString() && newData.child('customer_name').val().length > 0 && newData.child('rating').isNumber() && newData.child('rating').val() >= 1 && newData.child('rating').val() <= 5 && newData.child('review_text').isString() && newData.child('review_text').val().length > 0 && newData.child('timestamp').isNumber() && root.child('business_owners').child($uid).child('orders').child($reviewUid).child('status').val() == 'delivered' && root.child('business_owners').child($uid).child('orders').child($reviewUid).child('items').child('item_1').child('product_id').val() == $productId"
+                ".write": "!data.exists() && newData.hasChildren(['customer_name', 'rating', 'review_text', 'timestamp']) && newData.child('customer_name').isString() && newData.child('customer_name').val().length > 0 && newData.child('rating').isNumber() && newData.child('rating').val() >= 1 && newData.child('rating').val() <= 5 && newData.child('review_text').isString() && newData.child('review_text').val().length > 0 && newData.child('timestamp').isNumber() && root.child('business_owners').child($uid).child('orders').child($reviewUid).child('status').val() == 'delivered' && root.child('business_owners').child($uid).child('orders').child($reviewUid).child('items').child('item_1').child('product_id').val() == $productId && (!newData.hasChild('sentiment') || newData.child('sentiment').val() == 'POSITIVE' || newData.child('sentiment').val() == 'NEUTRAL' || newData.child('sentiment').val() == 'NEGATIVE')"
               }
             }
           }
         },
-
         "reviews": {
           ".read": true,
           "$orderId": {
             ".write": "!data.exists() && newData.hasChildren(['name', 'email', 'product', 'order_id', 'rating', 'text', 'sentiment', 'createdAt']) && newData.child('order_id').val() == $orderId && newData.child('rating').isNumber() && newData.child('rating').val() >= 1 && newData.child('rating').val() <= 5 && root.child('business_owners').child($uid).child('orders').child($orderId).exists() && root.child('business_owners').child($uid).child('orders').child($orderId).child('status').val() == 'delivered' && root.child('business_owners').child($uid).child('orders').child($orderId).child('customer_email').val().toLowerCase() == newData.child('email').val().toLowerCase()"
           }
         },
-
         "visitor_daily": {
           ".read": "auth != null && auth.uid == $uid",
           "$dayId": {
             ".write": "(!data.exists() && newData.isNumber() && newData.val() == 1) || (data.exists() && newData.isNumber() && newData.val() == data.val() + 1)"
           }
         },
-
         "dashboard_stats": {
           ".read": "auth != null && auth.uid == $uid",
           "visitor_count": {
@@ -300,23 +360,81 @@
             ".write": "(!data.exists() && newData.isNumber()) || (data.exists() && newData.isNumber()) || (auth != null && auth.uid == $uid)"
           }
         },
-
         "orders": {
           ".read": "auth != null && auth.uid == $uid",
           "$orderId": {
             ".write": "(auth != null && auth.uid == $uid) || (!data.exists() && newData.hasChildren(['customer_name', 'customer_email', 'total_amount', 'items', 'status', 'createdAt']) && newData.child('status').val() == 'pending')"
           }
         },
-
+        "review_unlocks": {
+          ".read": true,
+          "$orderId": {
+            ".write": "auth != null && auth.uid == $uid"
+          }
+        },
+        "order_notifications": {
+          ".read": "auth != null && auth.uid == $uid",
+          ".write": "auth != null && auth.uid == $uid"
+        },
         "kyc_documents": {
           ".read": "auth != null && auth.uid == $uid",
           ".write": "auth != null && auth.uid == $uid"
         },
-
         "financials": {
           ".read": "auth != null && auth.uid == $uid",
           ".write": "auth != null && auth.uid == $uid"
         }
+      }
+    },
+    "onboarding": {
+      "$uid": {
+        ".read": "(auth != null && auth.uid == $uid) || (auth != null && auth.token.admin == true && auth.token.email_verified == true)",
+        ".write": "auth != null && auth.uid == $uid",
+        "emailVerified": {
+          ".validate": "newData.isBoolean() && (newData.val() == false || auth.token.email_verified == true)"
+        }
+      }
+    },
+    "uploads": {
+      "$uid": {
+        ".read": "(auth != null && auth.uid == $uid) || (auth != null && auth.token.admin == true && auth.token.email_verified == true)"
+      }
+    },
+    "kyc_engine_results": {
+      "$uid": {
+        ".read": "(auth != null && auth.uid == $uid) || (auth != null && auth.token.admin == true && auth.token.email_verified == true)"
+      }
+    },
+    "consultants": {
+      "$uid": {
+        ".read": "(auth != null && auth.uid == $uid) || (auth != null && auth.token.admin == true && auth.token.email_verified == true)",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "sampleOrders": {
+      ".read": "auth != null && ((query.orderByChild == 'founderId' && query.equalTo == auth.uid) || (query.orderByChild == 'investorId' && query.equalTo == auth.uid))",
+      ".indexOn": [
+        "founderId",
+        "investorId",
+        "nextNotificationAt"
+      ],
+      "$orderId": {
+        ".read": "auth != null && (data.child('investorId').val() == auth.uid || data.child('founderId').val() == auth.uid)"
+      }
+    },
+    "agreements": {
+      ".read": "auth != null && ((query.orderByChild == 'founderId' && query.equalTo == auth.uid) || (query.orderByChild == 'investorId' && query.equalTo == auth.uid))",
+      ".indexOn": [
+        "founderId",
+        "investorId"
+      ],
+      "$contractId": {
+        ".read": "auth != null && (data.child('investorId').val() == auth.uid || data.child('founderId').val() == auth.uid) || (auth != null && root.child('dossierAgreementReaders').child($contractId).child(auth.uid).val() == true)"
+      }
+    },
+    "dossierFounderChats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid"
       }
     }
   }

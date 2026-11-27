@@ -74,7 +74,7 @@ export async function hydrateBusinessFromRtdb(
       landingPageTemplate: String(b.landingPageTemplate ?? ""),
       landingPageAbout: String(b.landingPageAbout ?? ownerProfile?.pitch ?? ""),
       isRegistered: true,
-      isApproved: Boolean(b.isApproved ?? true),
+      isApproved: Boolean(b.isApproved) === true || String(b.kycStatus || "") === "approved",
     });
     return;
   }

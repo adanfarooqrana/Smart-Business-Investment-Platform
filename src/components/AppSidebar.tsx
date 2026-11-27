@@ -1,10 +1,10 @@
+import { BrandLogo } from "@/components/BrandLogo";
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   MessageSquare,
   Gauge,
   Bot,
   TrendingUp,
-  Sparkles,
   Home,
   Handshake,
   User,
@@ -38,6 +38,7 @@ import { toast } from "sonner";
 export function AppSidebar() {
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const navigate = useNavigate();
+  const searchText = useRouterState({ select: (r) => r.location.searchStr });
   const { role, business, investor, consultant, entrepreneur, isLoggedIn, resetState } = useAppState();
   const { logout } = useAuth();
 
@@ -70,7 +71,8 @@ export function AppSidebar() {
       ];
     } else if (isLoggedIn && role === "investor") {
       return [
-        { title: "AI Investor Desk", url: "/app/investor", icon: TrendingUp },
+        { title: "AI Investor Desk", url: "/app/investor", icon: TrendingUp, search: {} },
+        { title: "Explore Founders", url: "/app/investor", icon: User, search: { view: "founders" } },
         { title: "AI Investment Expert", url: "/app/consultant", icon: Bot },
         communityItem,
       ];
@@ -161,10 +163,8 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <Link to="/" className="flex items-center gap-3 px-3 py-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500 shadow-md">
-            <Sparkles className="h-5.5 w-5.5 text-white" />
-          </div>
-          <span className="font-display text-base font-extrabold tracking-tight">Smart Business AI</span>
+          <BrandLogo className="h-11 w-11 rounded-xl bg-white p-1" />
+          <span className="font-display text-base font-extrabold tracking-tight">InvestBiz</span>
         </Link>
       </SidebarHeader>
 
@@ -175,7 +175,8 @@ export function AppSidebar() {
             <SidebarMenu>
               {items.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={pathname === item.url}>
+                  <SidebarMenuButton asChild isActive={pathname === item.url && (item.url !== "/app/investor" ||
+                    (new URLSearchParams(searchText).get("view") === "founders") === (item.search?.view === "founders"))}>
                     <Link
                       to={item.url}
                       search={item.search}

@@ -15,6 +15,11 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppState, repairAppState } from "@/hooks/useAppState";
 import { getUserRole } from "@/services/firebaseService";
+import { getInvestorKycStatus } from "@/components/investor/InvestorKycVerification";
+import { backendRequest } from "@/lib/backendClient";
+import { resendEmailVerificationMail } from "@/services/identityVerificationService";
+import { getFirestoreOnboardingDoc, syncStage1ToFirestore } from "@/services/onboardingFirestoreService";
+import { resolveOnboardingLock } from "@/lib/onboardingResume";
 import { hydrateInvestorFromRtdb } from "@/hooks/useInvestorSession";
 import { hydrateBusinessFromRtdb } from "@/hooks/useBusinessSession";
 import { Button } from "@/components/ui/button";
@@ -50,7 +55,7 @@ function friendlyAuthError(err: unknown): string {
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { login, refreshUserData } = useAuth();
+  const { login, refreshUserData, resetPassword } = useAuth();
   const {
     setRole,
     setIsLoggedIn,
@@ -58,10 +63,6 @@ function LoginPage() {
     registerInvestor,
     registerBusiness,
     registerConsultant,
-    entrepreneur,
-    investor,
-    business,
-    consultant,
   } = useAppState();
 
   const [email, setEmail] = useState("");
@@ -69,45 +70,37 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const [resetNotice, setResetNotice] = useState("");
 
-  const tryLocalLogin = (loginEmail: string, loginPassword: string): boolean => {
-    repairAppState();
-    const e = loginEmail.trim().toLowerCase();
-    const p = loginPassword;
-
-    if (entrepreneur?.isRegistered && entrepreneur?.email?.toLowerCase() === e && entrepreneur?.password === p) {
-      registerEntrepreneur({ ...entrepreneur, email: entrepreneur.email, password: p });
-      navigate({ to: "/founder/dashboard" });
-      return true;
+  const handlePasswordReset = async () => {
+    setResetting(true);
+    setError("");
+    setResetNotice("");
+    try {
+      await resetPassword(email);
+      setResetNotice("If the account exists, check your inbox for a password reset link.");
+    } catch (error) {
+      if ((error as { code?: string })?.code === "auth/user-not-found") {
+        setResetNotice("If the account exists, check your inbox for a password reset link.");
+      } else {
+        setError(friendlyAuthError(error));
+      }
+    } finally {
+      setResetting(false);
     }
-    // Investors MUST use Firebase Auth UID — local-only login creates detached RTDB roots
-    if (investor?.isRegistered && investor?.email?.toLowerCase() === e && investor?.password === p) {
-      return false;
-    }
-    if (business?.isRegistered && business?.email?.toLowerCase() === e && business?.password === p) {
-      registerBusiness({ ...business, email: business.email, password: p });
-      navigate({ to: "/app/score" });
-      return true;
-    }
-    if (consultant?.isRegistered && consultant?.email?.toLowerCase() === e && consultant?.password === p) {
-      registerConsultant({ ...consultant, email: consultant.email, password: p });
-      navigate({ to: "/app/wholesale" });
-      return true;
-    }
-    return false;
   };
 
   const routeAfterFirebaseLogin = async (
     uid: string,
     loginEmail: string,
-    loginPassword: string,
     displayName?: string,
   ) => {
     repairAppState();
 
     const fallback = {
       email: loginEmail,
-      password: loginPassword,
+      password: "",
       name: displayName ?? loginEmail.split("@")[0],
     };
 
@@ -131,7 +124,7 @@ function LoginPage() {
           name: founderProfile.fullName || fallback.name,
           email: founderProfile.email || fallback.email,
           phone: founderProfile.phone || "",
-          password: loginPassword,
+          password: "",
           paymentType: "bank",
           bankAccountNumber: founderProfile.bankDetails?.iban || "",
           isRegistered: true,
@@ -187,7 +180,7 @@ function LoginPage() {
           name: String(profile.name ?? fallback.name),
           email: String(profile.email ?? fallback.email),
           phone: String(profile.phone ?? ""),
-          password: loginPassword,
+          password: "",
           specialty: String(profile.specialty ?? "Mobile Accessories"),
           experience: String(profile.experience ?? "National Shipping"),
           location: String(profile.location ?? ""),
@@ -199,7 +192,7 @@ function LoginPage() {
         registerConsultant({
           name: fallback.name,
           email: fallback.email,
-          password: loginPassword,
+          password: "",
           phone: "",
           specialty: "Mobile Accessories",
           experience: "National Shipping",
@@ -234,9 +227,43 @@ function LoginPage() {
     setLoading(true);
     try {
       const cred = await login(loginEmail, loginPassword);
-      await routeAfterFirebaseLogin(cred.uid, loginEmail, loginPassword, cred.displayName ?? undefined);
+      const response = await backendRequest(cred, "/api/users/me");
+      const profile = await response.json();
+      const rawRole = profile.role ?? await getUserRole(cred.uid);
+      const role = rawRole === "founder" ? "entrepreneur" : rawRole === "business" ? "business_owner" : rawRole;
+      if (role === "investor" || role === "business_owner" || role === "entrepreneur" || role === "wholesaler") {
+        if (!cred.emailVerified) {
+          // The verification gate also offers resend if Firebase throttles this request.
+          void resendEmailVerificationMail(loginEmail).catch(() => {});
+          navigate({ to: "/app/register", search: { resume: role } });
+          return;
+        }
+        if (role === "investor") {
+          const kyc = await getInvestorKycStatus();
+          if (kyc.stage !== 3 || !kyc.livenessPassed) {
+            navigate({ to: "/app/register", search: { resume: "investor" } });
+            return;
+          }
+          await routeAfterFirebaseLogin(cred.uid, loginEmail, kyc.fullName || cred.displayName || undefined);
+          return;
+        }
+        const lock = await resolveOnboardingLock(cred.uid, role);
+        if (lock.stage !== "approved" && lock.stage !== "awaiting_admin") {
+          const document = await getFirestoreOnboardingDoc(cred.uid);
+          if (document?.onboardingStage !== "completed") {
+            if (!document?.emailVerified || document.onboardingStage === 1) {
+              await syncStage1ToFirestore({
+                uid: cred.uid, email: cred.email || loginEmail, role, emailVerified: true,
+              });
+            }
+            navigate({ to: "/app/register", search: { resume: role } });
+            return;
+          }
+        }
+      }
+      if (!cred.emailVerified) throw new Error("Verify your email before signing in.");
+      await routeAfterFirebaseLogin(cred.uid, loginEmail, cred.displayName ?? undefined);
     } catch (firebaseErr) {
-      if (tryLocalLogin(loginEmail, loginPassword)) return;
       setError(friendlyAuthError(firebaseErr));
     } finally {
       setLoading(false);
@@ -256,7 +283,7 @@ function LoginPage() {
       <div className="relative mx-auto flex max-w-6xl flex-col items-center gap-10 px-6 py-12 lg:flex-row lg:items-start lg:justify-between lg:py-16">
         <div className="max-w-md text-center lg:text-left">
           <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-amber-200/80 bg-amber-50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-800">
-            SmartBiz Grow Login
+            InvestBiz Grow Login
           </p>
           <h1 className="font-display text-3xl font-extrabold tracking-tight text-slate-900 md:text-4xl">
             Open your dashboard
@@ -339,6 +366,11 @@ function LoginPage() {
                 </div>
               </div>
 
+              <button type="button" disabled={loading || resetting} onClick={() => void handlePasswordReset()}
+                className="text-sm font-semibold text-amber-800 hover:underline">
+                {resetting ? "Sending reset link..." : "Forgot password?"}
+              </button>
+              {resetNotice && <p role="status" className="text-sm text-emerald-700">{resetNotice}</p>}
               {error && (
                 <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
                   {error}

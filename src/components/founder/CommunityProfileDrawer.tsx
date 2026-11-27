@@ -78,7 +78,7 @@ export function CommunityProfileDrawer({ username, isOpen, onClose, isOwnProfile
           <div className="pt-12">
             <h2 className="font-display text-xl font-bold text-white">{username}</h2>
             <span className="mt-1 inline-block rounded-full bg-[#FFD700]/20 px-3 py-0.5 text-[10px] font-bold text-[#FFD700]">
-              {isOwnProfile ? "Entrepreneur / Founder" : "Community Member"}
+              {isOwnProfile ? "Entrepreneur" : "Community Member"}
             </span>
           </div>
 

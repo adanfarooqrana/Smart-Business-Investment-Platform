@@ -195,7 +195,7 @@ function LiveLandingPage() {
           <div className="space-y-6">
             <div className="inline-flex items-center gap-2 rounded-full border border-current/10 bg-current/5 px-3.5 py-1 text-xs font-semibold">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Verified SmartBiz Reputation Profile</span>
+              <span>Verified InvestBiz Reputation Profile</span>
             </div>
             <h1 className="text-4xl md:text-6xl font-extrabold leading-tight tracking-tight">
               Crafted in {business.isRegistered ? business.location : "San Francisco"}

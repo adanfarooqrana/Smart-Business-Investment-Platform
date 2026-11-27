@@ -65,7 +65,7 @@ const WHOLESALER_EXPERTS: Record<string, string[]> = {
 };
 
 const BUSINESS_EXPERTS: Record<string, string[]> = {
-  "Financing & Capital": ["Zain Malik (Business Finance)", "SmartBiz Capital Desk"],
+  "Financing & Capital": ["Zain Malik (Business Finance)", "InvestBiz Capital Desk"],
   "Marketing & Sales": ["Zain Malik (SEO)", "Local Growth Collective"],
   "Legal & Compliance": ["Business Compliance Desk", "Gujranwala SME Legal"],
   "Hiring & Team": ["HR Connect Gujranwala", "Business Owners Guild"],

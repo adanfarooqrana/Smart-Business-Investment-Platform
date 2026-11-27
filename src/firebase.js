@@ -14,17 +14,15 @@ import {
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// Naya Firebase Configuration (Using .env variables first with fallbacks)
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? "AIzaSyDWMFY4PNfL5N3ZCDuQuQ949uztpWAwfRk",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? "fyp-final-d643b.firebaseapp.com",
-  databaseURL:
-    import.meta.env.VITE_FIREBASE_DATABASE_URL ??
-    "https://fyp-final-d643b-default-rtdb.firebaseio.com", // Naye RTDB ka URL (agar active kiya ho)
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? "fyp-final-d643b",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? "fyp-final-d643b.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? "1077411823688",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID ?? "1:1077411823688:web:ccd7cac5edfea200ab987d",
+  apiKey: "AIzaSyDMUqBly-UZeorPqf1VdtrnId5Fajs4Wg4",
+  authDomain: "investbiz-3d869.firebaseapp.com",
+  databaseURL: "https://investbiz-3d869-default-rtdb.firebaseio.com",
+  projectId: "investbiz-3d869",
+  storageBucket: "investbiz-3d869.firebasestorage.app",
+  messagingSenderId: "391628309220",
+  appId: "1:391628309220:web:7ceaca8ab434877999a2f1",
+  measurementId: "G-N1YG226KQ7"
 };
 
 const app = initializeApp(firebaseConfig);

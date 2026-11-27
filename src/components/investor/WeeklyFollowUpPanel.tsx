@@ -36,7 +36,7 @@ export function WeeklyFollowUpPanel() {
                 Update request generator for {followUp.startupTitle}
               </h3>
               <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-                Let's ask the founder about these metrics. SmartBiz AI has pre-loaded suggested questions based on your investment terms.
+                Let's ask the founder about these metrics. InvestBiz AI has pre-loaded suggested questions based on your investment terms.
               </p>
             </div>
           </div>

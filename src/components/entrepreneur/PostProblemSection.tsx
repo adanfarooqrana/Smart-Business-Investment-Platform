@@ -265,7 +265,7 @@ export function PostProblemSection({ founderId, founderName, darkMode, onRouted 
           <div className="flex items-center gap-2 rounded-xl border border-[#FFD700]/15 bg-[#FFD700]/5 px-3 py-2">
             <Bot className="h-4 w-4 shrink-0 text-[#FFA500]" />
             <p className="text-[10px] leading-snug text-slate-400">
-              AI matches your problem with verified partners in the SmartBiz network.
+              AI matches your problem with verified partners in the InvestBiz network.
             </p>
           </div>
         </form>

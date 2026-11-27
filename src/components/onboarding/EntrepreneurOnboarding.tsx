@@ -1,4 +1,6 @@
-import { useCallback, useRef, useState } from "react";
+import { emptyFounderEvidence, FounderEvidenceFields, founderEvidenceReady, submitFounderEvidence } from "@/components/founder/FounderEvidenceFields";
+import { BrandLogo } from "@/components/BrandLogo";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Lightbulb,
@@ -22,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { ref, update as rtdbUpdate } from "firebase/database";
 import type { EntrepreneurProfile } from "@/services/entrepreneurService";
 import { auth, database } from "@/firebase";
+import { getFirestoreOnboardingDoc } from "@/services/onboardingFirestoreService";
 import { useAppState } from "@/hooks/useAppState";
 import { CnicFaceVerify, type CnicFaceResult } from "@/components/verification/CnicFaceVerify";
 import { checkDuplicateFounderCredentials, initializeFounderProfile, FOUNDER_PROFILE } from "@/services/founderFirebaseService";
@@ -79,6 +82,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 }
 
 type FormState = {
+  photoDataUrl: string;
   fullName: string;
   email: string;
   password: string;
@@ -89,11 +93,12 @@ type FormState = {
   phone: string;
 };
 
-export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
+export function EntrepreneurOnboarding({ onBack, resume = false }: { onBack: () => void; resume?: boolean }) {
   const navigate = useNavigate();
   const { registerEntrepreneur: registerLocal } = useAppState();
   const [showIntro, setShowIntro] = useState(true);
   const [step, setStep] = useState(0);
+  const [founderEvidence, setFounderEvidence] = useState(() => emptyFounderEvidence());
   const [submitting, setSubmitting] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [submitPhase, setSubmitPhase] = useState("");
@@ -119,6 +124,7 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
   };
 
   const [form, setForm] = useState<FormState>({
+    photoDataUrl: "",
     fullName: "",
     email: "",
     password: "",
@@ -131,6 +137,27 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  useEffect(() => {
+    if (!resume) return;
+    let cancelled = false;
+    void (async () => {
+      await auth.authStateReady();
+      const user = auth.currentUser;
+      if (!user?.emailVerified || !user.email) return;
+      const progress = await getFirestoreOnboardingDoc(user.uid);
+      if (cancelled || auth.currentUser?.uid !== user.uid ||
+          progress?.role !== "entrepreneur" || !progress.emailVerified) return;
+      setForm((form) => ({
+        ...form,
+        email: user.email || form.email,
+        fullName: progress.profile?.fullName || user.displayName || form.fullName,
+      }));
+      setShowIntro(false);
+      setStep(1);
+    })();
+    return () => { cancelled = true; };
+  }, [resume]);
 
   const handleEmailVerified = useCallback(() => {
     setAwaitingEmail(false);
@@ -151,7 +178,7 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
       );
     }
     if (step === 2) {
-      return !!verify && verify.faceMatchScore >= 70;
+      return !!verify && verify.faceMatchScore >= 70 && founderEvidenceReady(founderEvidence);
     }
     return true;
   };
@@ -162,6 +189,7 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
     setCreatingAccount(true);
     try {
       await createEmailPasswordAndSendVerification({
+        role: "entrepreneur",
         email: form.email.trim(),
         password: form.password,
         fullName: form.fullName.trim(),
@@ -175,7 +203,7 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
   };
 
   const handleSubmit = async () => {
-    if (!verify) return;
+    if (!verify || !founderEvidenceReady(founderEvidence)) return;
     setError("");
     setSubmitting(true);
     setVerifying(true);
@@ -196,6 +224,9 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
 
       const uid = user.uid;
       const profileId = `FND-${uid.slice(0, 6).toUpperCase()}`;
+
+      setSubmitPhase("Saving private banking and reference evidence...");
+      await submitFounderEvidence(user, founderEvidence);
 
       setSubmitPhase("Founder profile initialize ho raha hai...");
       await initializeFounderProfile(uid, {
@@ -230,8 +261,11 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
         uploadOne(verify.liveSelfie, "selfies"),
       ]);
 
+      const photoUrl = form.photoDataUrl ? await ensureCloudinaryUrl(form.photoDataUrl, "profiles") : "";
+
       // Persist KYC assets into nested founders/{uid}/profile (pending admin approval)
       await rtdbUpdate(ref(database, FOUNDER_PROFILE(uid)), {
+        photoUrl,
         cnicFrontUrl: cnicFrontUrl || "",
         cnicBackUrl: cnicBackUrl || "",
         liveSelfieUrl: liveSelfieUrl || "",
@@ -354,8 +388,8 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
           <div className="relative z-10 flex min-h-screen flex-col">
             <div className="flex items-center justify-between px-6 pt-6">
               <div className="flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-white backdrop-blur-sm">
-                <Lightbulb className="h-4 w-4 text-[#FFD700]" />
-                <span className="text-sm font-semibold">Smart Business AI</span>
+                <BrandLogo className="h-7 w-7" />
+                <span className="text-sm font-semibold">InvestBiz</span>
               </div>
               <button
                 type="button"
@@ -458,7 +492,7 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
               {step === 0 && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-3 duration-300">
                   {awaitingEmail ? (
-                    <EmailVerificationGate
+                    <EmailVerificationGate role="entrepreneur"
                       email={form.email.trim()}
                       onVerified={handleEmailVerified}
                       accentClassName="text-amber-600"
@@ -481,6 +515,18 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
                           required
                         />
                       </div>
+                      <label className="block space-y-2 text-sm">
+                        Public profile photo (optional)
+                        <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 5 * 1024 * 1024) { setError("Profile photo must be 5 MB or smaller"); return; }
+                          const reader = new FileReader();
+                          reader.onload = () => set("photoDataUrl", String(reader.result));
+                          reader.readAsDataURL(file);
+                        }} />
+                        {form.photoDataUrl && <img src={form.photoDataUrl} alt="Profile photo preview" className="h-18 w-18 rounded-full object-cover" />}
+                      </label>
                       <div className="space-y-1.5">
                         <Label className="flex items-center gap-1">
                           <Mail className="h-3.5 w-3.5" /> Email Address{" "}
@@ -609,6 +655,7 @@ export function EntrepreneurOnboarding({ onBack }: { onBack: () => void }) {
                     Upload CNIC Front and Back, then capture a live webcam selfie.
                     Facial match of 70% or greater is required before admin review.
                   </p>
+                  <FounderEvidenceFields value={founderEvidence} onChange={setFounderEvidence} />
                   <CnicFaceVerify
                     accent="amber"
                     onComplete={(result) => setVerify(result)}

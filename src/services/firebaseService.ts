@@ -211,6 +211,7 @@ export const updateInvestorProfile = async (uid: string, updates: Partial<Invest
 export interface ConsultantProfile {
   uid?: string;
   name?: string;
+  shopName?: string;
   email?: string;
   phone?: string;
   specialty?: string;
@@ -726,6 +727,11 @@ export const getUserPreferences = async (uid: string) => {
 // ============================================================================
 
 export const uploadBase64Image = async (uid: string, fileName: string, base64Data: string, mimeType: string = 'image/jpeg') => {
+  if (fileName.startsWith("community-") && auth.currentUser?.uid === uid) {
+    const { uploadPublicAsset } = await import("@/lib/backendClient");
+    const image = await fetch(base64Data).then((response) => response.blob());
+    return uploadPublicAsset(auth.currentUser, image, fileName);
+  }
   const fileRef = storageRef(storage, `uploads/${uid}/${fileName}`);
   const snapshot = await uploadString(fileRef, base64Data, 'data_url');
   return await getDownloadURL(snapshot.ref);

@@ -142,7 +142,7 @@ const RAW_STARTUP_IDEAS: StartupIdeaRaw[] = [
     accent: "#fef3c7",
     stage1: {
       ideaDescription:
-        "Luna Bistro is a premium farm-to-table café chain targeting urban professionals in Karachi. The model combines dine-in experience with a subscription meal-plan channel for corporate offices, leveraging verified supplier networks and a 87/100 SmartBiz reputation score to accelerate trust-based customer acquisition.",
+        "Luna Bistro is a premium farm-to-table café chain targeting urban professionals in Karachi. The model combines dine-in experience with a subscription meal-plan channel for corporate offices, leveraging verified supplier networks and a 87/100 InvestBiz reputation score to accelerate trust-based customer acquisition.",
       expectedRoi: "18% annually",
       profitSharingPercent: "12% of net operating profit",
       ebitdaEstimate: "PKR 4.2M – 5.8M (Year 2)",

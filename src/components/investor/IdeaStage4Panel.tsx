@@ -30,7 +30,7 @@ export function IdeaStage4Panel({ idea, message, onResolved }: IdeaStage4PanelPr
               {isPending ? `Awaiting reply from ${idea.founderName}` : "Founder has responded"}
             </h3>
             <p className="mt-1 text-xs text-slate-600">
-              Your {message.type === "agreement_objection" ? "agreement objection" : "message"} was delivered in SmartBiz official format.
+              Your {message.type === "agreement_objection" ? "agreement objection" : "message"} was delivered in InvestBiz official format.
             </p>
           </div>
         </div>

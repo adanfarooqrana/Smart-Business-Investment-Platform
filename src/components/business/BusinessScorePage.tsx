@@ -1,3 +1,4 @@
+import { PayoutAccountDialog } from "@/components/marketplace/PayoutAccountDialog";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -7,6 +8,7 @@ import {
   ExternalLink,
   Trash2,
   Plus,
+  Loader2,
 } from "lucide-react";
 import { useAppState } from "@/hooks/useAppState";
 import { useBusinessSession } from "@/hooks/useBusinessSession";
@@ -26,6 +28,33 @@ import { onValue, ref } from "firebase/database";
 import { toast } from "sonner";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { firestore } from "@/firebase";
+import { KycPendingGate } from "@/components/kyc/KycPendingGate";
+import { useKycApprovalGate } from "@/hooks/useKycApprovalGate";
+import { extractIndustryCategory } from "@/lib/industryAssets";
+
+function landingTemplateForIndustry(category: string): string {
+  switch (category) {
+    case "bakery":
+      return "bakery-sweet";
+    case "cafe":
+      return "cafe-modern";
+    case "fast_food":
+      return "bistro-gourmet";
+    case "clothing":
+    case "footwear":
+    case "jewelry":
+      return "retail-boutique";
+    case "grocery":
+      return "retail-green";
+    case "electronics":
+    case "manufacturing":
+      return "saas-minimal";
+    case "beauty":
+      return "agency-creative";
+    default:
+      return "cafe-modern";
+  }
+}
 
 type ProductForm = {
   id: string;
@@ -33,6 +62,8 @@ type ProductForm = {
   description: string;
   sale_price: number;
   real_price: number;
+  /** MRP / list price before discount (storefront strikethrough) */
+  original_price: number;
   quantity: number;
   /** Up to 3 Cloudinary URLs (slot-indexed; empty string = vacant slot) */
   imageUrls: string[];
@@ -65,6 +96,7 @@ const emptyNewProduct = (): Omit<ProductForm, "id"> => ({
   description: "",
   sale_price: 0,
   real_price: 0,
+  original_price: 0,
   quantity: 50,
   imageUrls: ["", "", ""],
   images: ["", "", ""],
@@ -73,6 +105,7 @@ const emptyNewProduct = (): Omit<ProductForm, "id"> => ({
 function normalizeProduct(key: string, raw: any): ProductForm {
   const sale = Number(raw?.sale_price ?? raw?.price ?? 0) || 0;
   const real = Number(raw?.real_price ?? raw?.product_cost ?? Math.round(sale * 0.4)) || 0;
+  const original = Number(raw?.original_price ?? sale) || sale;
   const imageUrls = toImageSlots(
     raw?.imageUrls,
     raw?.images,
@@ -85,6 +118,7 @@ function normalizeProduct(key: string, raw: any): ProductForm {
     description: String(raw?.description || ""),
     sale_price: sale,
     real_price: real,
+    original_price: original,
     quantity: Number(raw?.quantity ?? 50) || 50,
     imageUrls,
     images: imageUrls,
@@ -117,6 +151,7 @@ export function BusinessScorePage() {
   const [newProduct, setNewProduct] = useState(emptyNewProduct());
 
   const uid = currentUser?.uid ?? business.uid;
+  const { ready: kycReady, blocked: kycBlocked } = useKycApprovalGate(uid);
   const [isLoading, setIsLoading] = useState(true);
   const [websiteSettings, setWebsiteSettings] = useState<WebsiteSettings | null>(null);
   const [promptInput, setPromptInput] = useState(
@@ -236,10 +271,12 @@ export function BusinessScorePage() {
         promptInput.trim(),
       );
       if (res.success && res.subdomain) {
-        createLandingPage("cafe-modern", promptInput.trim());
+        const industry = extractIndustryCategory(promptInput.trim(), businessName);
+        const landingTemplate = landingTemplateForIndustry(industry);
+        createLandingPage(landingTemplate, promptInput.trim());
         updateBusinessProfile({
           landingPageCreated: true,
-          landingPageTemplate: "cafe-modern",
+          landingPageTemplate: landingTemplate,
           landingPageAbout: promptInput.trim(),
           subdomain: res.subdomain,
           website: `https://${res.subdomain}.smartbiz.com`,
@@ -322,6 +359,7 @@ export function BusinessScorePage() {
         description: product.description,
         sale_price: Number(product.sale_price) || 0,
         real_price: Number(product.real_price) || 0,
+        original_price: Number(product.original_price) || Number(product.sale_price) || 0,
         quantity: Number(product.quantity) || 0,
         images: imageUrls,
         imageUrls,
@@ -373,6 +411,7 @@ export function BusinessScorePage() {
         description: newProduct.description,
         sale_price: Number(newProduct.sale_price) || 0,
         real_price: Number(newProduct.real_price) || 0,
+        original_price: Number(newProduct.original_price) || Number(newProduct.sale_price) || 0,
         quantity: Number(newProduct.quantity) || 50,
         images: imageUrls,
         imageUrls,
@@ -387,6 +426,7 @@ export function BusinessScorePage() {
           description: newProduct.description.trim(),
           sale_price: Number(newProduct.sale_price) || 0,
           real_price: Number(newProduct.real_price) || 0,
+          original_price: Number(newProduct.original_price) || Number(newProduct.sale_price) || 0,
           quantity: Number(newProduct.quantity) || 50,
           images: imageUrls,
           imageUrls,
@@ -429,6 +469,26 @@ export function BusinessScorePage() {
           <Button onClick={() => navigate({ to: "/app/login" })}>Sign In</Button>
         </div>
       </div>
+    );
+  }
+
+  if (!kycReady) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+        <p className="text-sm text-muted-foreground">Checking admin approval…</p>
+      </div>
+    );
+  }
+
+  if (kycBlocked && uid) {
+    return (
+      <KycPendingGate
+        uid={uid}
+        role="business_owner"
+        email={business?.email || currentUser?.email || ""}
+        approvedPath="/app/score"
+      />
     );
   }
 
@@ -478,6 +538,8 @@ export function BusinessScorePage() {
           )}
         </div>
 
+        <div className="flex justify-end"><PayoutAccountDialog /></div>
+
         {!isWebsiteCreated ? (
           /* NEW USER — Grok AI prompt only */
           <div className="rounded-3xl border border-slate-200 bg-white p-6 md:p-8 shadow-sm space-y-5">
@@ -487,19 +549,19 @@ export function BusinessScorePage() {
                 Build Your Storefront with Grok AI
               </h3>
               <p className="text-sm text-slate-500 mt-1">
-                Enter a prompt describing your brand to generate your automated website cover and layout.
+                Describe your business and design (background, theme color, text color, font). AI builds the storefront from your prompt.
               </p>
             </div>
             <textarea
               className="flex min-h-[120px] w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/40 focus-visible:border-orange-400 transition-all resize-y"
               rows={4}
-              placeholder="e.g., Organic Coffee Roasters providing fresh beans in Lahore..."
+              placeholder='e.g., Organic coffee shop in Lahore. Black background, white text, orange theme color, modern font.'
               value={promptInput}
               onChange={(e) => setPromptInput(e.target.value)}
             />
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <p className="text-xs text-orange-600 leading-relaxed max-w-lg">
-                Writing a descriptive prompt locks your niche category and auto-generates realistic product feature lists dynamically.
+                Tip: mention background color, text color, theme/accent color, and font (modern / elegant / bold / classic / tech / friendly).
               </p>
               <Button
                 onClick={() => void handleGenerateGrokWebsite()}
@@ -661,7 +723,20 @@ export function BusinessScorePage() {
                         />
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <div>
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block">
+                            Original
+                          </label>
+                          <input
+                            type="number"
+                            className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+                            value={slot.original_price}
+                            onChange={(e) =>
+                              updateLocalProduct(slot.id, "original_price", Number(e.target.value))
+                            }
+                          />
+                        </div>
                         <div>
                           <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block">
                             Sale
@@ -743,7 +818,19 @@ export function BusinessScorePage() {
                           setNewProduct((p) => ({ ...p, description: e.target.value }))
                         }
                       />
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <input
+                          type="number"
+                          className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+                          placeholder="Original"
+                          value={newProduct.original_price || ""}
+                          onChange={(e) =>
+                            setNewProduct((p) => ({
+                              ...p,
+                              original_price: Number(e.target.value) || 0,
+                            }))
+                          }
+                        />
                         <input
                           type="number"
                           className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs"

@@ -18,7 +18,7 @@ const CATEGORY_OPTIONS = [
 ] as const;
 
 export function InvestorFeedSunHero({
-  searchQuery,
+  searchQuery = "",
   onSearchChange,
   onSearchInteract,
 }: InvestorFeedSunHeroProps) {
@@ -93,7 +93,6 @@ export function InvestorFeedSunHero({
             const isMoreOptions = cat.label === "More Options";
             const isActive =
               !isMoreOptions &&
-              cat.value !== "" &&
               searchQuery.toLowerCase().includes(cat.value.toLowerCase());
 
             return (

@@ -41,7 +41,7 @@ function AppLayout() {
                 <Sparkles className="h-4.5 w-4.5 text-white" />
               </div>
               <span className="font-display text-lg font-bold tracking-tight text-slate-900">
-                Smart Business <span className="text-slate-400">AI</span>
+                InvestBiz
               </span>
             </Link>
 

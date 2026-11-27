@@ -1,3 +1,5 @@
+import { doc, getDoc } from "firebase/firestore";
+import { firestore } from "../firebase";
 import { db } from "../firebase";
 import { ref, set, get, onValue, update, off, remove } from "firebase/database";
 import type { StartupIdea } from "@/data/startupIdeas";
@@ -345,6 +347,17 @@ export function aggregateApprovedFundingFromPitchesRoot(
 }
 
 /** Atomic 2-box write + wipe obsolete ROI / viability leaves */
+function fundingStory(profile: Record<string, string> | undefined, pitches: Record<string, any> | null) {
+  const entries = Object.values(pitches || {}).filter(Boolean);
+  const title = String(profile?.pitchTitle || '').trim().toLowerCase();
+  entries.sort((a,b) => Number(b.updatedAt || b.createdAt || 0) - Number(a.updatedAt || a.createdAt || 0));
+  const pitch = entries.find(p => title && String(p.ideaTitle || p.stage1?.ideaTitle || '').trim().toLowerCase() === title) || entries[0];
+  const stage = pitch?.stage1 || {};
+  const idea = [pitch?.ideaTitle || stage.ideaTitle || profile?.pitchTitle, pitch?.ideaDescription || stage.ideaDescription || profile?.pitchSummary].filter(Boolean).join(' — ');
+  const product = [pitch?.stage2?.sampleProductName || pitch?.stage3?.sampleProductName, stage.coreProblemSolution, pitch?.productType || stage.productType].filter(Boolean).join(' · ');
+  return {idea:idea.slice(0,1000),product:product.slice(0,1000)};
+}
+
 export async function persistFounderTwoBoxStats(
   founderId: string,
   stats: FounderStatsNode,
@@ -361,6 +374,11 @@ export async function persistFounderTwoBoxStats(
       [`${FOUNDER_STATS(uid)}/roiCalculated`]: null,
       [`${FOUNDER_STATS(uid)}/viabilityScore`]: null,
     });
+    const registration = await getDoc(doc(firestore, "users", uid));
+    const name = registration.data()?.profile?.roleDetails?.startupName?.trim();
+    const amount = Number(stats.totalFundingRaised);
+    const story = name && amount > 0 && amount <= 50000 ? fundingStory(registration.data()?.profile?.roleDetails, (await get(ref(db, FOUNDER_PITCHES(uid)))).val()) : {};
+    await set(ref(db, `startup_funding/${uid}`), name && amount > 0 && amount <= 50000 ? { name, amount, ...story } : null);
   } catch (error) {
     console.error("persistFounderTwoBoxStats error:", error);
   }

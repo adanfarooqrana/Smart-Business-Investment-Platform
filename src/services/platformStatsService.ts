@@ -222,7 +222,7 @@ function safeOnValue(path: string, onData: (snap: DataSnapshot) => void): () => 
   return onValue(
     ref(database, path),
     onData,
-    (err) => console.warn(`[SmartBiz] RTDB listener denied at "${path}":`, err.message),
+    (err) => console.warn(`[InvestBiz] RTDB listener denied at "${path}":`, err.message),
   );
 }
 
@@ -257,9 +257,9 @@ export async function syncPlatformStatsToRtdb(): Promise<void> {
       pitchedIdeas,
       syncedAt: Date.now(),
     });
-    console.log("[SmartBiz] platform_stats synced from live RTDB");
+    console.log("[InvestBiz] platform_stats synced from live RTDB");
   } catch (err) {
-    console.warn("[SmartBiz] platform_stats sync failed — publish database rules:", err);
+    console.warn("[InvestBiz] platform_stats sync failed — publish database rules:", err);
   }
 }
 

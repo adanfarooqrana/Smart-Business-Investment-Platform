@@ -14,6 +14,8 @@ export interface CanonicalProduct {
     description: string;
     real_price: number;
     sale_price: number;
+    /** List / MRP before discount — shown struck on storefront */
+    original_price?: number;
     quantity: number;
     /** Up to 3 Cloudinary HTTPS URLs (main, angle, detail) */
     images: string[];
@@ -25,6 +27,15 @@ export interface CanonicalProduct {
 
 export interface WebsiteSettings {
     theme_color?: string;
+    /** Full-page storefront background */
+    background_color?: string;
+    text_color?: string;
+    heading_color?: string;
+    hero_background?: string;
+    /** modern | elegant | bold | classic | tech | friendly */
+    font_family?: string;
+    card_background?: string;
+    nav_background?: string;
     banner_title: string;
     banner_description: string;
     banner_image_url?: string;
@@ -33,6 +44,9 @@ export interface WebsiteSettings {
     isWebsiteCreated?: boolean;
     subdomain?: string;
     publishedUrl?: string;
+    /** Industry niche detected from AI prompt (clothing, fast_food, …) */
+    industry_category?: string;
+    industry_label?: string;
 }
 
 export interface ProductReview {
@@ -40,6 +54,14 @@ export interface ProductReview {
     rating: number;
     review_text: string;
     timestamp: number;
+    /** NLP classification */
+    sentiment?: "POSITIVE" | "NEUTRAL" | "NEGATIVE";
+    /** Polarity score in [-1, 1] */
+    polarity?: number;
+    /** Confidence in [0, 1] */
+    confidence?: number;
+    product_id?: string;
+    order_id?: string;
 }
 
 /** Normalize up to 3 HTTPS/Cloudinary image URLs with legacy field fallbacks. */
@@ -192,10 +214,23 @@ export class BusinessOwnerService {
                 dashboard_stats: {
                     visitor_count: 0,
                     total_products: 0,
-                    total_reviews: 0
+                    total_reviews: 0,
+                    total_revenue: 0,
+                    gross_profit: 0,
+                    net_profit: 0,
+                    final_net_profit: 0,
+                    operational_cost: 0,
+                    total_orders_pending: 0,
                 },
                 website_settings: {
                     theme_color: "#3b82f6",
+                    background_color: "#f8fafc",
+                    text_color: "#1e293b",
+                    heading_color: "#0f172a",
+                    hero_background: "#0f172a",
+                    font_family: "modern",
+                    card_background: "#ffffff",
+                    nav_background: "#ffffff",
                     banner_title: `Welcome to ${businessName}`,
                     banner_description: pitch,
                     banner_image_url: "",
@@ -269,6 +304,13 @@ export class BusinessOwnerService {
             }),
             update(ref(db, `business_owners/${uid}/website_settings`), {
                 theme_color: aiGeneratedSettings.theme_color,
+                background_color: aiGeneratedSettings.background_color || "#f8fafc",
+                text_color: aiGeneratedSettings.text_color || "#1e293b",
+                heading_color: aiGeneratedSettings.heading_color || "#0f172a",
+                hero_background: aiGeneratedSettings.hero_background || "#0f172a",
+                font_family: aiGeneratedSettings.font_family || "modern",
+                card_background: aiGeneratedSettings.card_background || "#ffffff",
+                nav_background: aiGeneratedSettings.nav_background || "#ffffff",
                 banner_title: aiGeneratedSettings.banner_title,
                 banner_description: aiGeneratedSettings.banner_description,
                 banner_image_url: aiGeneratedSettings.banner_image_url || "",
@@ -285,9 +327,11 @@ export class BusinessOwnerService {
                 visitor_count: 0,
                 total_reviews: 0,
                 total_revenue: 0,
+                gross_profit: 0,
                 net_profit: 0,
+                final_net_profit: 0,
                 operational_cost: 0,
-                total_orders_pending: 0
+                total_orders_pending: 0,
             })
         ]);
 
@@ -318,7 +362,7 @@ export class BusinessOwnerService {
     }
 
     /**
-     * Accept or Decline Order. Triggers Status changes & mock email triggers.
+     * Accept or Decline Order. On accept, emails the customer their unique OrderNumber.
      */
     static async updateOrderStatus(uid: string, orderId: string, action: "accept" | "decline"): Promise<boolean> {
         const orderRef = ref(db, `business_owners/${uid}/orders/${orderId}`);
@@ -329,7 +373,7 @@ export class BusinessOwnerService {
         const status = action === "accept" ? "accepted" : "declined";
 
         // Update order status in DB
-        await update(orderRef, { status });
+        await update(orderRef, { status, statusUpdatedAt: Date.now() });
 
         // Update Stats: Decrement pending order count
         const pendingRef = ref(db, `business_owners/${uid}/dashboard_stats/total_orders_pending`);
@@ -338,7 +382,37 @@ export class BusinessOwnerService {
             return current - 1;
         });
 
-        console.log(`Email dispatched to ${orderData.customer_email}: Order is ${status}`);
+        try {
+            const { sendOrderStatusEmail } = await import("../lib/orderEmailService");
+            let businessName = "";
+            let storefrontUrl = "";
+            try {
+                const profileSnap = await get(ref(db, `business_owners/${uid}/profile`));
+                if (profileSnap.exists()) {
+                    const prof = profileSnap.val();
+                    businessName = prof.businessName || prof.business_name || "";
+                    if (prof.subdomain) {
+                        const origin = typeof window !== "undefined" ? window.location.origin : "https://smartbiz.com";
+                        storefrontUrl = `${origin}/site/${prof.subdomain}`;
+                    }
+                }
+            } catch {
+                /* optional */
+            }
+            await sendOrderStatusEmail({
+                ownerUid: uid,
+                orderId,
+                customerName: orderData.customer_name || "Customer",
+                customerEmail: orderData.customer_email || "",
+                status,
+                totalAmount: Number(orderData.total_amount) || 0,
+                businessName,
+                storefrontUrl,
+            });
+        } catch (emailErr) {
+            console.warn("[orders] Email notification failed (status still updated):", emailErr);
+        }
+
         return true;
     }
 
@@ -355,6 +429,52 @@ export class BusinessOwnerService {
 
         // Mark status as delivered
         await update(orderRef, { status: "delivered", deliveredAt: Date.now() });
+
+        // Public review-unlock token (customers cannot read private orders/)
+        const productIds: string[] = [];
+        if (orderData.items) {
+            Object.keys(orderData.items).forEach((key) => {
+                const pid = String(orderData.items[key]?.product_id || "").trim();
+                if (pid) productIds.push(pid);
+            });
+        }
+        await set(ref(db, `business_owners/${uid}/review_unlocks/${orderId}`), {
+            status: "delivered",
+            product_ids: productIds,
+            customer_email: orderData.customer_email || "",
+            unlockedAt: Date.now(),
+        });
+
+        try {
+            const { sendOrderStatusEmail } = await import("../lib/orderEmailService");
+            let businessName = "";
+            let storefrontUrl = "";
+            try {
+                const profileSnap = await get(ref(db, `business_owners/${uid}/profile`));
+                if (profileSnap.exists()) {
+                    const prof = profileSnap.val();
+                    businessName = prof.businessName || prof.business_name || "";
+                    if (prof.subdomain) {
+                        const origin = typeof window !== "undefined" ? window.location.origin : "https://smartbiz.com";
+                        storefrontUrl = `${origin}/site/${prof.subdomain}`;
+                    }
+                }
+            } catch {
+                /* optional */
+            }
+            await sendOrderStatusEmail({
+                ownerUid: uid,
+                orderId,
+                customerName: orderData.customer_name || "Customer",
+                customerEmail: orderData.customer_email || "",
+                status: "delivered",
+                totalAmount: Number(orderData.total_amount) || 0,
+                businessName,
+                storefrontUrl,
+            });
+        } catch (emailErr) {
+            console.warn("[orders] Delivery email failed:", emailErr);
+        }
 
         // Extract financial variables
         const orderRevenue = orderData.total_amount;
@@ -400,17 +520,36 @@ export class BusinessOwnerService {
         });
 
         // Update Master Dashboard Statistics
+        // net_profit field = Gross Profit from delivered sales (revenue − product cost)
         const statsRef = ref(db, `business_owners/${uid}/dashboard_stats`);
         const statsSnap = await get(statsRef);
         if (statsSnap.exists()) {
             const currentStats = statsSnap.val();
+            const grossProfit = (currentStats.net_profit || currentStats.gross_profit || 0) + orderNetProfit;
+            const opCost = Number(currentStats.operational_cost || 0);
             await update(statsRef, {
                 total_revenue: (currentStats.total_revenue || 0) + orderRevenue,
-                net_profit: (currentStats.net_profit || 0) + orderNetProfit
+                gross_profit: grossProfit,
+                net_profit: grossProfit, // legacy key = gross profit from deliveries
+                final_net_profit: grossProfit - opCost,
             });
         }
 
         return true;
+    }
+
+    /** Manual operational cost for Net Profit = Gross Profit − Op Cost */
+    static async updateOperationalCost(uid: string, amount: number): Promise<void> {
+        const statsRef = ref(db, `business_owners/${uid}/dashboard_stats`);
+        const snap = await get(statsRef);
+        const current = snap.exists() ? snap.val() : {};
+        const gross = Number(current.gross_profit ?? current.net_profit ?? 0);
+        const op = Math.max(0, Number(amount) || 0);
+        await update(statsRef, {
+            operational_cost: op,
+            gross_profit: gross,
+            final_net_profit: gross - op,
+        });
     }
 
     /** Persist banner title/description to website_settings. */
@@ -429,6 +568,7 @@ export class BusinessOwnerService {
             description: string;
             sale_price: number;
             real_price: number;
+            original_price?: number;
             quantity?: number;
             images?: string[];
             imageUrls?: string[];
@@ -446,6 +586,7 @@ export class BusinessOwnerService {
             description: data.description.trim(),
             sale_price: Number(data.sale_price) || 0,
             real_price: Number(data.real_price) || 0,
+            original_price: Number((data as any).original_price) || Number(data.sale_price) || 0,
             quantity: data.quantity ?? 50,
             images,
             imageUrls: images,
@@ -478,8 +619,8 @@ export class BusinessOwnerService {
 
     /**
      * Submit one product-specific review for a delivered order.
+     * Requires OrderNumber whose status is DELIVERED; runs NLP sentiment and persists it.
      * The order ID is the review key, preventing duplicate reviews per order.
-     * Firebase rules verify delivery status and the ordered product ID.
      */
     static async submitDeliveredProductReview(
         ownerUid: string,
@@ -488,7 +629,58 @@ export class BusinessOwnerService {
         payload: { name: string; rating: number; text: string }
     ): Promise<void> {
         const cleanOrderId = orderId.trim().replace(/^#/, "");
+        if (!cleanOrderId) {
+            throw new Error("Please enter your Order Number to submit a verified review.");
+        }
+
+        // Prefer public review_unlocks (readable by customers); fall back to orders/ for owners
+        const unlockSnap = await get(ref(db, `business_owners/${ownerUid}/review_unlocks/${cleanOrderId}`));
+        let orderStatus = "";
+        let orderedProductIds: string[] = [];
+
+        if (unlockSnap.exists()) {
+            const unlock = unlockSnap.val();
+            orderStatus = String(unlock.status || "").toLowerCase();
+            orderedProductIds = Array.isArray(unlock.product_ids)
+                ? unlock.product_ids.map((id: string) => String(id).trim()).filter(Boolean)
+                : [];
+        } else {
+            try {
+                const orderSnap = await get(ref(db, `business_owners/${ownerUid}/orders/${cleanOrderId}`));
+                if (!orderSnap.exists()) {
+                    throw new Error("Order Number not found. Check the ID from your confirmation email.");
+                }
+                const orderData = orderSnap.val();
+                orderStatus = String(orderData.status || "").toLowerCase();
+                const items = orderData.items || {};
+                orderedProductIds = Object.values(items)
+                    .map((item: any) => String(item?.product_id || "").trim())
+                    .filter(Boolean);
+            } catch (err: any) {
+                if (err?.message?.includes("Order Number not found")) throw err;
+                // Private orders unreadable to guests — write rules will still enforce delivery
+                orderStatus = "";
+            }
+        }
+
+        if (orderStatus && orderStatus !== "delivered") {
+            throw new Error(
+                "Reviews can only be submitted after your order has been marked as delivered."
+            );
+        }
+
+        if (orderedProductIds.length > 0 && !orderedProductIds.includes(productId)) {
+            throw new Error(
+                "This Order Number does not include the selected product. Use the Order Number from that purchase."
+            );
+        }
+
         const rating = Math.min(5, Math.max(1, Math.round(Number(payload.rating) || 5)));
+        const reviewText = payload.text.trim();
+        if (!reviewText) {
+            throw new Error("Please write your review before submitting.");
+        }
+
         const reviewRef = ref(
             db,
             `business_owners/${ownerUid}/products/${productId}/reviews/${cleanOrderId}`
@@ -498,21 +690,40 @@ export class BusinessOwnerService {
             throw new Error("A review for this product order already exists.");
         }
 
+        const { analyzeSentimentWithGroq, analyzeReviewSentiment } = await import("../lib/sentimentAnalysis");
+        let nlp;
+        try {
+            nlp = await analyzeSentimentWithGroq(reviewText);
+        } catch {
+            nlp = analyzeReviewSentiment(reviewText, rating);
+        }
+
+        const sentimentLabel = nlp.sentiment || nlp.label || "NEUTRAL";
+        const polarityVal = typeof nlp.polarityScore === "number" ? nlp.polarityScore : (nlp.polarity ?? 0);
+        const confidenceVal = typeof nlp.confidence === "number" ? nlp.confidence : 0.8;
+
         const review: ProductReview = {
             customer_name: payload.name.trim() || "Customer",
             rating,
-            review_text: payload.text.trim(),
+            review_text: reviewText,
             timestamp: Date.now(),
+            sentiment: sentimentLabel as "POSITIVE" | "NEUTRAL" | "NEGATIVE",
+            polarity: polarityVal,
+            confidence: confidenceVal,
+            product_id: productId,
+            order_id: cleanOrderId,
         };
 
         try {
             await set(reviewRef, review);
         } catch (err: any) {
-            throw new Error(
-                err?.message?.includes("PERMISSION_DENIED") || err?.code === "PERMISSION_DENIED"
-                    ? "Review rejected. Confirm this product belongs to the delivered order."
-                    : err.message || "Failed to submit review."
-            );
+            const msg = String(err?.message || "");
+            if (msg.includes("PERMISSION_DENIED") || err?.code === "PERMISSION_DENIED") {
+                throw new Error(
+                    "Reviews can only be submitted after your order has been marked as delivered."
+                );
+            }
+            throw new Error(err.message || "Failed to submit review.");
         }
     }
 

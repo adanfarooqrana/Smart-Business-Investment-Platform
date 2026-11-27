@@ -257,7 +257,7 @@ export function buildStage2DataDoc(
     founderBackground: {
       yearsExperience: stage2.founderYearsExperience ?? 0,
       priorVentures: stage2.founderPriorVentures?.trim() || "Disclosed by founder at pitch",
-      education: stage2.founderEducation?.trim() || "Verified via SmartBiz entrepreneur onboarding",
+      education: stage2.founderEducation?.trim() || "Verified via InvestBiz entrepreneur onboarding",
       verificationScore: stage2.verificationScore ?? 85,
     },
     marketInsight: {

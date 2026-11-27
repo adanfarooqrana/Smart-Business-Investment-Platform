@@ -1,9 +1,10 @@
 /**
- * Cloudinary Unsigned Upload helper for SmartBiz.
+ * Cloudinary Unsigned Upload helper for InvestBiz.
  * Uses VITE_CLOUDINARY_CLOUD_NAME + VITE_CLOUDINARY_UPLOAD_PRESET from env.
  */
 
 export type CloudinaryFolder =
+  | "chat_attachments"
   | "business_logos"
   | "business_banners"
   | "product_images"
@@ -114,6 +115,58 @@ export async function uploadToCloudinary(
     const msg =
       data.error?.message ||
       `Cloudinary upload failed (${response.status}). Check unsigned preset settings.`;
+    onProgress?.({ status: "error", message: msg });
+    throw new Error(msg);
+  }
+
+  const secureUrl = String(data.secure_url || data.url).trim();
+  onProgress?.({ status: "done", message: "Upload complete", percent: 100 });
+  return secureUrl;
+}
+
+export async function uploadFileToCloudinary(
+  file: File,
+  folderName: CloudinaryFolder = "chat_attachments",
+  onProgress?: (p: CloudinaryUploadProgress) => void,
+): Promise<string> {
+  if (!file) throw new Error("No file provided.");
+  assertFileSize(file);
+  onProgress?.({ status: "uploading", message: "Uploading file...", percent: 10 });
+
+  const cloudName = getCloudName();
+  const uploadPreset = getUploadPreset();
+  const endpoint = `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`;
+
+  const form = new FormData();
+  form.append("file", file);
+  form.append("upload_preset", uploadPreset);
+  if (folderName) form.append("folder", `smartbiz/${folderName}`);
+
+  onProgress?.({ status: "uploading", message: "Uploading file...", percent: 40 });
+
+  let response: Response;
+  try {
+    response = await fetch(endpoint, { method: "POST", body: form });
+  } catch (err) {
+    onProgress?.({
+      status: "error",
+      message: "Network error while uploading file.",
+    });
+    throw err instanceof Error ? err : new Error("Cloudinary upload failed.");
+  }
+
+  onProgress?.({ status: "uploading", message: "Processing file...", percent: 80 });
+
+  const data = (await response.json().catch(() => ({}))) as {
+    secure_url?: string;
+    url?: string;
+    error?: { message?: string };
+  };
+
+  if (!response.ok || (!data.secure_url && !data.url)) {
+    const msg =
+      data.error?.message ||
+      `Cloudinary upload failed (${response.status}). Check unsigned preset allows raw/auto.`;
     onProgress?.({ status: "error", message: msg });
     throw new Error(msg);
   }

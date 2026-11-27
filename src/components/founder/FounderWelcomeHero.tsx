@@ -48,7 +48,7 @@ export function FounderWelcomeHero({
     >
       <div className="mb-6">
         <p className="mb-1 text-xs font-bold uppercase tracking-widest text-[#FFD700]/70">
-          Founder Command Center
+          Entrepreneur Command Center
         </p>
         <h1 className="font-display text-3xl font-extrabold text-white md:text-4xl">
           Welcome back,{" "}

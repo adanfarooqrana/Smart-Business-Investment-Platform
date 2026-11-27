@@ -74,7 +74,7 @@ export function InvestmentAgreementModal({
                 <Shield className="h-4 w-4 text-amber-300" />
               </div>
               <div>
-                <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-amber-300/90">SmartBiz Legal · Escrow</p>
+                <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-amber-300/90">InvestBiz Legal · Escrow</p>
                 <DialogTitle className="font-display text-lg font-bold text-white leading-tight">
                   Investment & Escrow Agreement
                 </DialogTitle>

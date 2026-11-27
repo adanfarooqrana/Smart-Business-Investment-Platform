@@ -1,12 +1,14 @@
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { backendRequest } from "@/lib/backendClient";
 /**
  * Admin KYC review pipeline — complete signup payloads for Business / Founder / Investor.
  * Canonical queue: kyc_reviews/{uid}
  * Mirror: users/{uid} (full object for authenticated owners)
  */
-import { database } from "@/firebase";
+import { auth, database } from "@/firebase";
 import { ref, set, update, onValue, off, get } from "firebase/database";
 
-export type KycReviewRole = "business_owner" | "founder" | "investor";
+export type KycReviewRole = "business_owner" | "founder" | "investor" | "wholesaler";
 export type KycStatus = "pending" | "approved" | "rejected";
 
 export type KycReviewRecord = {
@@ -60,47 +62,27 @@ export type SubmitKycReviewInput = {
 export const KYC_REVIEW = (uid: string) => `kyc_reviews/${uid}`;
 export const USER_NODE = (uid: string) => `users/${uid}`;
 
-export const ADMIN_SESSION_KEY = "smartbiz_admin_session_v1";
-export const ADMIN_EMAIL = "admin@system.com";
-export const ADMIN_PASSWORD = "admin123Password!";
+export async function isAdminSessionValid(): Promise<boolean> {
+  await auth.authStateReady();
+  const user = auth.currentUser;
+  if (!user) return false;
+  const token = await user.getIdTokenResult().catch(() => null);
+  return token?.claims.admin === true && token.claims.email_verified === true;
+}
 
-export function isAdminSessionValid(): boolean {
+export async function clearAdminSession(): Promise<void> {
+  await signOut(auth);
+}
+
+export async function authenticateAdmin(email: string, password: string): Promise<boolean> {
+  const { user } = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
   try {
-    if (typeof window === "undefined") return false;
-    const raw = sessionStorage.getItem(ADMIN_SESSION_KEY);
-    if (!raw) return false;
-    const parsed = JSON.parse(raw) as { email?: string; token?: string; at?: number };
-    return (
-      String(parsed?.email || "").toLowerCase() === ADMIN_EMAIL &&
-      String(parsed?.token || "").length > 8
-    );
+    await backendRequest(user, "/api/admin/session");
+    return true;
   } catch {
+    await clearAdminSession();
     return false;
   }
-}
-
-export function setAdminSession(): void {
-  const token = `adm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
-  sessionStorage.setItem(
-    ADMIN_SESSION_KEY,
-    JSON.stringify({ email: ADMIN_EMAIL, token, at: Date.now() }),
-  );
-}
-
-export function clearAdminSession(): void {
-  try {
-    sessionStorage.removeItem(ADMIN_SESSION_KEY);
-  } catch {
-    /* ignore */
-  }
-}
-
-export function authenticateAdmin(email: string, password: string): boolean {
-  const ok =
-    String(email || "").trim().toLowerCase() === ADMIN_EMAIL &&
-    String(password || "") === ADMIN_PASSWORD;
-  if (ok) setAdminSession();
-  return ok;
 }
 
 function clean(v: unknown): string {
@@ -147,9 +129,7 @@ export async function submitPendingKycReview(
       updatedAt: now,
     };
 
-    await update(ref(database), {
-      [KYC_REVIEW(uid)]: record,
-      [USER_NODE(uid)]: {
+    const profileFields = {
         uid,
         role: input.role,
         fullName: record.fullName,
@@ -176,9 +156,12 @@ export async function submitPendingKycReview(
         matchConfidenceScore: record.matchConfidenceScore || 0,
         kycStatus: "pending",
         isApproved: false,
-        createdAt: now,
         updatedAt: now,
-      },
+    };
+
+    await update(ref(database), {
+      [KYC_REVIEW(uid)]: record,
+      ...Object.fromEntries(Object.entries(profileFields).map(([key, value]) => [USER_NODE(uid) + '/' + key, value])),
     });
 
     return record;
@@ -334,6 +317,21 @@ async function syncRoleApproval(uid: string, role: KycReviewRole, approved: bool
         isApproved: approved,
         updatedAt: Date.now(),
       });
+      try {
+        await update(ref(database, `business_owners/${uid}/profile`), {
+          kycStatus: status,
+          isApproved: approved,
+          updatedAt: Date.now(),
+        });
+      } catch {
+        /* optional mirror */
+      }
+    } else if (role === "wholesaler") {
+      await update(ref(database, `consultants/${uid}`), {
+        kycStatus: status,
+        isApproved: approved,
+        updatedAt: Date.now(),
+      });
     }
   } catch (error) {
     console.error("syncRoleApproval error:", error);
@@ -346,7 +344,6 @@ export async function approveKycReview(uid: string): Promise<void> {
     if (!cleanUid) throw new Error("uid required");
     const now = Date.now();
 
-    // Soft-admin session writes the open kyc_reviews queue only.
     // Authenticated users self-sync role nodes via applyLocalRoleApproval on approve.
     await update(ref(database), {
       [`${KYC_REVIEW(cleanUid)}/kycStatus`]: "approved",

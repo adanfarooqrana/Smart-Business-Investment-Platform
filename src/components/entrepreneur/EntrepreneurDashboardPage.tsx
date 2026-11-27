@@ -14,8 +14,7 @@ import {
 import { Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { KycPendingGate } from "@/components/kyc/KycPendingGate";
-import { streamUserKycStatus } from "@/services/adminKycService";
-import { KYC_BYPASS_FOR_TESTING } from "@/lib/kycBypass";
+import { useKycApprovalGate } from "@/hooks/useKycApprovalGate";
 
 export function EntrepreneurDashboardPage() {
   const navigate = useNavigate();
@@ -35,28 +34,10 @@ export function EntrepreneurDashboardPage() {
 
   const [firestoreProfile, setFirestoreProfile] = useState<EntrepreneurProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
-  const [kycPending, setKycPending] = useState(false);
-  const [kycChecked, setKycChecked] = useState(false);
 
   const founderUid = currentUser?.uid || entrepreneur?.uid || "";
   const { ideas: myIdeas } = useFounderPitchedIdeas(founderUid || undefined);
-
-  useEffect(() => {
-    if (KYC_BYPASS_FOR_TESTING) {
-      setKycPending(false);
-      setKycChecked(true);
-      return;
-    }
-    if (!founderUid) {
-      setKycChecked(true);
-      setKycPending(false);
-      return;
-    }
-    return streamUserKycStatus(founderUid, (r) => {
-      setKycPending(r?.kycStatus === "pending" || r?.kycStatus === "rejected");
-      setKycChecked(true);
-    });
-  }, [founderUid]);
+  const { ready: kycReady, blocked: kycBlocked } = useKycApprovalGate(founderUid);
 
   useEffect(() => {
     if (!founderUid) return;
@@ -122,7 +103,7 @@ export function EntrepreneurDashboardPage() {
   if (!sessionReady || authLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center" style={{ background: "#1a1a2e" }}>
-        <p className="text-sm text-[#FFD700] animate-pulse">Loading Founder Dashboard...</p>
+        <p className="text-sm text-[#FFD700] animate-pulse">Loading Entrepreneur Dashboard...</p>
       </div>
     );
   }
@@ -136,7 +117,7 @@ export function EntrepreneurDashboardPage() {
         <Lightbulb className="mb-4 h-12 w-12 text-[#FFD700]" />
         <h2 className="font-display text-xl font-bold text-white">Founder access required</h2>
         <p className="mt-2 text-sm text-slate-400">
-          Only registered entrepreneurs can access the Founder Dashboard.
+          Only registered entrepreneurs can access the Entrepreneur Dashboard.
         </p>
         <div className="mt-6 flex gap-3">
           <Button variant="outline" onClick={() => navigate({ to: "/app/register" })}>
@@ -154,7 +135,7 @@ export function EntrepreneurDashboardPage() {
     );
   }
 
-  if (!kycChecked) {
+  if (!kycReady) {
     return (
       <div className="flex min-h-screen items-center justify-center" style={{ background: "#1a1a2e" }}>
         <p className="text-sm text-[#FFD700] animate-pulse">Checking KYC approval…</p>
@@ -162,26 +143,24 @@ export function EntrepreneurDashboardPage() {
     );
   }
 
-  if (kycPending && founderUid) {
+  if (kycBlocked && founderUid) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-        <KycPendingGate
-          uid={founderUid}
-          role="founder"
-          email={entrepreneur?.email || currentUser?.email || ""}
-          approvedPath="/founder/dashboard"
-        />
-      </div>
+      <KycPendingGate
+        uid={founderUid}
+        role="founder"
+        email={entrepreneur?.email || currentUser?.email || ""}
+        approvedPath="/founder/dashboard"
+      />
     );
   }
 
-  const displayName = firestoreProfile?.fullName || entrepreneur?.name || "Founder";
+  const displayName = firestoreProfile?.fullName || entrepreneur?.name || "Entrepreneur";
   const profileId = firestoreProfile?.profileId || entrepreneur?.profileId || "ENT-PENDING";
 
   if (profileLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center" style={{ background: "#1a1a2e" }}>
-        <p className="text-sm text-[#FFD700] animate-pulse">Loading Founder Dashboard...</p>
+        <p className="text-sm text-[#FFD700] animate-pulse">Loading Entrepreneur Dashboard...</p>
       </div>
     );
   }

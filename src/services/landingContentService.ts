@@ -78,7 +78,7 @@ function rtdbOnValue<T>(
     ref(database, path),
     onData,
     (err) => {
-      console.warn(`[SmartBiz] RTDB read blocked at "${path}":`, err.message);
+      console.warn(`[InvestBiz] RTDB read blocked at "${path}":`, err.message);
     },
   );
 }

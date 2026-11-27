@@ -62,7 +62,7 @@ export function FounderTopNav({
             className="hidden font-display text-lg font-extrabold sm:inline"
             style={{ color: "#FFD700", textShadow: "0 0 12px rgba(255,215,0,0.6)" }}
           >
-            Smart Business AI
+            InvestBiz
           </span>
         </div>
 

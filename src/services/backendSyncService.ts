@@ -1,6 +1,5 @@
 /**
  * Mirrors Firestore founder/investor data to Firebase Realtime Database
- * (https://smart-business-investment-app-default-rtdb.firebaseio.com)
  */
 import { ref, set, push } from "firebase/database";
 import { database } from "../firebase";

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Mail, Loader2, RefreshCw, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,65 +7,94 @@ import {
   friendlyIdentityError,
 } from "@/services/identityVerificationService";
 
+import type { RoleType } from "@/services/onboardingFirestoreService";
+
 type EmailVerificationGateProps = {
   email: string;
-  onVerified: () => void;
+  role: RoleType;
+  onVerified: () => void | Promise<void>;
   accentClassName?: string;
+  delivery?: "accepted" | "pending";
+  deliveryError?: string;
 };
 
 /**
  * Blocks progress until auth.currentUser.emailVerified === true.
- * Polls reload() every 3s; offers Resend Verification Email.
+ * Polls every three seconds without overlapping requests.
  */
 export function EmailVerificationGate({
   email,
+  role,
   onVerified,
   accentClassName = "text-amber-600",
+  delivery = "accepted",
+  deliveryError = "",
 }: EmailVerificationGateProps) {
   const [checking, setChecking] = useState(true);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [mailAccepted, setMailAccepted] = useState(delivery === "accepted");
+  const [sendError, setSendError] = useState(deliveryError);
+
+  const checkNow = useRef<() => void>(() => {});
+  const onVerifiedRef = useRef(onVerified);
+  useEffect(() => { onVerifiedRef.current = onVerified; }, [onVerified]);
 
   useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setInterval> | null = null;
-
+    let disposed = false;
+    let running = false;
+    let complete = false;
     const tick = async () => {
+      if (running || disposed || complete) return;
+      running = true;
       try {
-        const ok = await reloadAndCheckEmailVerified();
-        if (cancelled) return;
-        setChecking(false);
-        if (ok) {
-          if (timer) clearInterval(timer);
-          onVerified();
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setChecking(false);
-          setError(friendlyIdentityError(err));
-        }
+        if (!(await reloadAndCheckEmailVerified(email, role)) || disposed) return;
+        await onVerifiedRef.current();
+        complete = true;
+      } catch (error) {
+        if (!disposed) setError(friendlyIdentityError(error));
+      } finally {
+        if (!disposed) setChecking(false);
+        running = false;
       }
     };
-
     void tick();
-    timer = setInterval(() => void tick(), 3000);
-
-    return () => {
-      cancelled = true;
-      if (timer) clearInterval(timer);
+    checkNow.current = () => {
+      if (running || complete || disposed) return;
+      setError(null);
+      setChecking(true);
+      void tick();
     };
-  }, [onVerified]);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") checkNow.current();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    const timer = window.setInterval(() => void tick(), 3000);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [email, role]);
 
   const handleResend = async () => {
     setResending(true);
     setError(null);
     setInfo(null);
+    setSendError("");
     try {
-      await resendEmailVerificationMail();
-      setInfo("Verification email resent. Check inbox / spam.");
-    } catch (err) {
-      setError(friendlyIdentityError(err));
+      const result = await resendEmailVerificationMail(email);
+      if (result === "verified") {
+        checkNow.current();
+        return;
+      }
+      setMailAccepted(true);
+      setInfo("Firebase accepted the verification request. Check your inbox and spam folder.");
+    } catch (err: unknown) {
+      setSendError(friendlyIdentityError(err));
     } finally {
       setResending(false);
     }
@@ -83,8 +112,9 @@ export function EmailVerificationGate({
         Check your email and verify to continue.
       </p>
       <p className="text-xs text-slate-500">
-        We sent a link to <span className="font-semibold text-slate-800">{email}</span>. This screen
-        updates automatically after you verify.
+        {mailAccepted ? "Verification link requested for " : "Verify the email address "}
+        <span className="font-semibold text-slate-800">{email}</span>.
+        {mailAccepted ? " Check your inbox and spam folder." : " Use the button below to request a link."}
       </p>
 
       <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
@@ -99,6 +129,11 @@ export function EmailVerificationGate({
         )}
       </div>
 
+      {sendError && (
+        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+          Could not send a verification link. {sendError}
+        </p>
+      )}
       {error && (
         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
           {error}
@@ -109,6 +144,10 @@ export function EmailVerificationGate({
           {info}
         </p>
       )}
+
+      <Button type="button" onClick={() => checkNow.current()} disabled={checking} className="mr-2 rounded-full">
+        I verified my email
+      </Button>
 
       <Button
         type="button"
@@ -123,7 +162,7 @@ export function EmailVerificationGate({
           </>
         ) : (
           <>
-            <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Resend Verification Email
+            <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> {mailAccepted ? "Resend Verification Email" : "Send Verification Email"}
           </>
         )}
       </Button>

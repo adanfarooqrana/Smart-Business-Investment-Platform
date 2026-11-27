@@ -1,3 +1,5 @@
+import { IDEA_STAGES as STAGES, liveIdeaBrief } from "@/lib/ideaBriefing";
+import { IdeaBriefingAgent } from "@/components/investor/IdeaBriefingAgent";
 import { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Lock, CheckCircle2, ChevronRight } from "lucide-react";
@@ -12,17 +14,6 @@ import { useAppState } from "@/hooks/useAppState";
 import { useAuth } from "@/contexts/AuthContext";
 import { streamPitchTransaction, saveInvestmentStageProgress, requireActiveInvestorUid } from "@/services/investorCoreService";
 import { auth } from "@/firebase";
-
-const STAGES = [
-  { id: 1 as const, label: "Stage 1", title: "Idea & Financial Terms", theme: "amber" as const },
-  {
-    id: 2 as const,
-    label: "Stage 2",
-    title: "Financial Requirements & Validation",
-    theme: "orange" as const,
-  },
-  { id: 3 as const, label: "Stage 3", title: "Payment", theme: "emerald" as const },
-];
 
 type IdeaDetailViewProps = {
   idea: StartupIdea;
@@ -41,6 +32,7 @@ export function IdeaDetailView({ idea, initialStage = 1 }: IdeaDetailViewProps) 
   const navigate = useNavigate();
 
   const [activeStage, setActiveStage] = useState<1 | 2 | 3>(initialStage);
+  const [agentQuestion, setAgentQuestion] = useState<string>();
   const [stageTransition, setStageTransition] = useState(false);
   const [stage1Done, setStage1Done] = useState(false);
   const [stage2Done, setStage2Done] = useState(false);
@@ -60,6 +52,7 @@ export function IdeaDetailView({ idea, initialStage = 1 }: IdeaDetailViewProps) 
     setLiveTxStatus(null);
     setCheckedItems(new Set());
     setInvestInput("500000");
+    setAgentQuestion(undefined);
   }, [idea.id, initialStage]);
 
   const investorName = investor.name || "Verified Investor";
@@ -139,6 +132,7 @@ export function IdeaDetailView({ idea, initialStage = 1 }: IdeaDetailViewProps) 
     setStageTransition(true);
     setTimeout(() => {
       setActiveStage(next);
+      setAgentQuestion(undefined);
       setStageTransition(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }, 280);
@@ -305,6 +299,8 @@ export function IdeaDetailView({ idea, initialStage = 1 }: IdeaDetailViewProps) 
         </div>
       </div>
 
+      <IdeaBriefingAgent brief={liveIdeaBrief(idea)} stage={activeStage} question={agentQuestion} />
+
       <div
         className={`stage-content-transition ${stageTransition ? "stage-content-exit" : "stage-content-enter"}`}
       >
@@ -316,7 +312,12 @@ export function IdeaDetailView({ idea, initialStage = 1 }: IdeaDetailViewProps) 
             </div>
             <IdeaStage1Panel
               idea={idea}
-              onAskAi={() => undefined}
+              onAskAi={(term) => {
+                setAgentQuestion(term);
+                const panel = document.getElementById("idea-briefing-agent");
+                panel?.focus({ preventScroll: true });
+                panel?.scrollIntoView({ behavior: "smooth", block: "center" });
+              }}
               checkedItems={checkedItems}
               onToggleCheck={toggleCheck}
             />

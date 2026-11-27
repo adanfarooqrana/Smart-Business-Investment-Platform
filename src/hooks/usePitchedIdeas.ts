@@ -17,7 +17,7 @@ export function usePitchedIdeas() {
     try {
       unsubscribe = streamFounderPitchesForInvestorFeed((ideas) => {
         if (!active) return;
-        setPitchedIdeas(ideas);
+        setPitchedIdeas(Array.isArray(ideas) ? ideas.filter((idea) => typeof idea?.id === "string") : []);
         setLoading(false);
         setError(null);
       });

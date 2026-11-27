@@ -13,7 +13,9 @@ import { Route as TestRouteImport } from './routes/test'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SiteSubdomainRouteImport } from './routes/site.$subdomain'
+import { Route as SignAgreementTokenRouteImport } from './routes/sign-agreement.$token'
 import { Route as LandingSlugRouteImport } from './routes/landing.$slug'
+import { Route as FounderProfileRouteImport } from './routes/founder.profile'
 import { Route as FounderDashboardRouteImport } from './routes/founder.dashboard'
 import { Route as DashboardOrdersRouteImport } from './routes/dashboard.orders'
 import { Route as AppWholesaleRouteImport } from './routes/app.wholesale'
@@ -53,9 +55,19 @@ const SiteSubdomainRoute = SiteSubdomainRouteImport.update({
   path: '/site/$subdomain',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SignAgreementTokenRoute = SignAgreementTokenRouteImport.update({
+  id: '/sign-agreement/$token',
+  path: '/sign-agreement/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LandingSlugRoute = LandingSlugRouteImport.update({
   id: '/landing/$slug',
   path: '/landing/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FounderProfileRoute = FounderProfileRouteImport.update({
+  id: '/founder/profile',
+  path: '/founder/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FounderDashboardRoute = FounderDashboardRouteImport.update({
@@ -170,7 +182,9 @@ export interface FileRoutesByFullPath {
   '/app/wholesale': typeof AppWholesaleRoute
   '/dashboard/orders': typeof DashboardOrdersRoute
   '/founder/dashboard': typeof FounderDashboardRoute
+  '/founder/profile': typeof FounderProfileRoute
   '/landing/$slug': typeof LandingSlugRoute
+  '/sign-agreement/$token': typeof SignAgreementTokenRoute
   '/site/$subdomain': typeof SiteSubdomainRoute
   '/app/businessprofile/$businessId': typeof AppBusinessprofileBusinessIdRoute
   '/app/investor/idea/$ideaId': typeof AppInvestorIdeaIdeaIdRoute
@@ -195,7 +209,9 @@ export interface FileRoutesByTo {
   '/app/wholesale': typeof AppWholesaleRoute
   '/dashboard/orders': typeof DashboardOrdersRoute
   '/founder/dashboard': typeof FounderDashboardRoute
+  '/founder/profile': typeof FounderProfileRoute
   '/landing/$slug': typeof LandingSlugRoute
+  '/sign-agreement/$token': typeof SignAgreementTokenRoute
   '/site/$subdomain': typeof SiteSubdomainRoute
   '/app/businessprofile/$businessId': typeof AppBusinessprofileBusinessIdRoute
   '/app/investor/idea/$ideaId': typeof AppInvestorIdeaIdeaIdRoute
@@ -221,7 +237,9 @@ export interface FileRoutesById {
   '/app/wholesale': typeof AppWholesaleRoute
   '/dashboard/orders': typeof DashboardOrdersRoute
   '/founder/dashboard': typeof FounderDashboardRoute
+  '/founder/profile': typeof FounderProfileRoute
   '/landing/$slug': typeof LandingSlugRoute
+  '/sign-agreement/$token': typeof SignAgreementTokenRoute
   '/site/$subdomain': typeof SiteSubdomainRoute
   '/app/businessprofile/$businessId': typeof AppBusinessprofileBusinessIdRoute
   '/app/investor/idea/$ideaId': typeof AppInvestorIdeaIdeaIdRoute
@@ -248,7 +266,9 @@ export interface FileRouteTypes {
     | '/app/wholesale'
     | '/dashboard/orders'
     | '/founder/dashboard'
+    | '/founder/profile'
     | '/landing/$slug'
+    | '/sign-agreement/$token'
     | '/site/$subdomain'
     | '/app/businessprofile/$businessId'
     | '/app/investor/idea/$ideaId'
@@ -273,7 +293,9 @@ export interface FileRouteTypes {
     | '/app/wholesale'
     | '/dashboard/orders'
     | '/founder/dashboard'
+    | '/founder/profile'
     | '/landing/$slug'
+    | '/sign-agreement/$token'
     | '/site/$subdomain'
     | '/app/businessprofile/$businessId'
     | '/app/investor/idea/$ideaId'
@@ -298,7 +320,9 @@ export interface FileRouteTypes {
     | '/app/wholesale'
     | '/dashboard/orders'
     | '/founder/dashboard'
+    | '/founder/profile'
     | '/landing/$slug'
+    | '/sign-agreement/$token'
     | '/site/$subdomain'
     | '/app/businessprofile/$businessId'
     | '/app/investor/idea/$ideaId'
@@ -312,7 +336,9 @@ export interface RootRouteChildren {
   AdminLoginRoute: typeof AdminLoginRoute
   DashboardOrdersRoute: typeof DashboardOrdersRoute
   FounderDashboardRoute: typeof FounderDashboardRoute
+  FounderProfileRoute: typeof FounderProfileRoute
   LandingSlugRoute: typeof LandingSlugRoute
+  SignAgreementTokenRoute: typeof SignAgreementTokenRoute
   SiteSubdomainRoute: typeof SiteSubdomainRoute
 }
 
@@ -346,11 +372,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SiteSubdomainRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sign-agreement/$token': {
+      id: '/sign-agreement/$token'
+      path: '/sign-agreement/$token'
+      fullPath: '/sign-agreement/$token'
+      preLoaderRoute: typeof SignAgreementTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/landing/$slug': {
       id: '/landing/$slug'
       path: '/landing/$slug'
       fullPath: '/landing/$slug'
       preLoaderRoute: typeof LandingSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/founder/profile': {
+      id: '/founder/profile'
+      path: '/founder/profile'
+      fullPath: '/founder/profile'
+      preLoaderRoute: typeof FounderProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/founder/dashboard': {
@@ -536,7 +576,9 @@ const rootRouteChildren: RootRouteChildren = {
   AdminLoginRoute: AdminLoginRoute,
   DashboardOrdersRoute: DashboardOrdersRoute,
   FounderDashboardRoute: FounderDashboardRoute,
+  FounderProfileRoute: FounderProfileRoute,
   LandingSlugRoute: LandingSlugRoute,
+  SignAgreementTokenRoute: SignAgreementTokenRoute,
   SiteSubdomainRoute: SiteSubdomainRoute,
 }
 export const routeTree = rootRouteImport

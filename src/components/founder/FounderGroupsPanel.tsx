@@ -25,7 +25,7 @@ type Props = {
 };
 
 const ROLE_LABEL: Record<string, string> = {
-  entrepreneur: "Founder",
+  entrepreneur: "Entrepreneur",
   investor: "Investor",
   business: "Business",
   consultant: "Wholesaler",

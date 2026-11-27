@@ -403,9 +403,9 @@ export function InvestorAIInvestmentExpert() {
 function getExpertReply(query: string, sector: string, budget: string): string {
   const q = query.toLowerCase();
   if (q.includes("roi") || q.includes("return"))
-    return `${sector} ventures in your ${budget} band typically target 18–35% annual ROI. Verify Stage 1 disclosures and compare against SmartBiz escrow milestones before deploying.`;
+    return `${sector} ventures in your ${budget} band typically target 18–35% annual ROI. Verify Stage 1 disclosures and compare against InvestBiz escrow milestones before deploying.`;
   if (q.includes("escrow") || q.includes("safe"))
-    return "SmartBiz Escrow holds PKR via JazzCash/EasyPaisa/Card until agreement + milestones are met. Always sign the digital contract in Stage 3 before payment.";
+    return "InvestBiz Escrow holds PKR via JazzCash/EasyPaisa/Card until agreement + milestones are met. Always sign the digital contract in Stage 3 before payment.";
   if (q.includes("equity") || q.includes("profit"))
     return "Equity % scales with your PKR ticket vs total raise. Profit-share deals offer faster cash returns — I can model both in your Ideas Feed Stage 2 calculator.";
   return `For ${sector}, focus on founder verification score, prior investor social proof, and market viability in Stage 2. Your ${budget} range matches 3–5 live dossiers in the feed right now.`;

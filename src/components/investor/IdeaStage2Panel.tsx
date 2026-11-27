@@ -21,8 +21,9 @@ export function IdeaStage2Panel({
   onInvestInputChange,
 }: IdeaStage2PanelProps) {
   const s2 = idea.stage2;
-  const productType = String(idea.stage1?.productType ?? "").trim();
-  const isPhysicalProduct = productType === "Physical Product";
+  const expenseBreakdown = Array.isArray(s2.expenseBreakdown) ? s2.expenseBreakdown : [];
+  /** Show whenever expense lines exist (founder stage 2) */
+  const showExpenseAllocation = expenseBreakdown.length > 0;
 
   const [localInput, setLocalInput] = useState("500000");
   const investInput = controlledInput ?? localInput;
@@ -55,7 +56,7 @@ export function IdeaStage2Panel({
     requestAnimationFrame(tick);
   }, [projection.assignedEquityPercent, projection.projectedAnnualProfitPkr]);
 
-  const totalExpenses = s2.expenseBreakdown.reduce((sum, e) => sum + e.amountPkr, 0);
+  const totalExpenses = expenseBreakdown.reduce((sum, e) => sum + e.amountPkr, 0);
   const fundedPercent =
     s2.totalCapitalRequiredPkr > 0
       ? Math.min((totalExpenses / s2.totalCapitalRequiredPkr) * 100, 100)
@@ -99,14 +100,14 @@ export function IdeaStage2Panel({
             </div>
           </div>
 
-          {isPhysicalProduct && (
+          {showExpenseAllocation && (
             <div>
               <div className="mb-2 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-amber-800/70">
                 <span>Expense Allocation</span>
                 <span>{Math.round(fundedPercent)}% mapped</span>
               </div>
               <div className="flex h-4 overflow-hidden rounded-full bg-amber-100/80 ring-1 ring-amber-200/60">
-                {s2.expenseBreakdown.map((line) => (
+                {expenseBreakdown.map((line) => (
                   <div
                     key={line.label}
                     className="h-full transition-all duration-500"
@@ -122,7 +123,7 @@ export function IdeaStage2Panel({
                 ))}
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {s2.expenseBreakdown.map((line) => (
+                {expenseBreakdown.map((line) => (
                   <div
                     key={line.label}
                     className="flex items-center justify-between rounded-xl border border-amber-200/40 bg-white/70 px-3 py-2"

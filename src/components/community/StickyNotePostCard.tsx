@@ -22,7 +22,7 @@ function authorLabel(post: FirestoreCommunityPost): string {
 }
 
 function badgeTone(badge: string): string {
-  if (badge === "Founder") return "bg-amber-600 text-white";
+  if (badge === "Founder" || badge === "Entrepreneur") return "bg-amber-600 text-white";
   if (badge === "Investor") return "bg-violet-600 text-white";
   if (badge === "Business Owner") return "bg-emerald-700 text-white";
   return "bg-slate-700 text-white";
@@ -49,7 +49,7 @@ export function StickyNotePostCard({
   const likes = Array.isArray(post.likes) ? post.likes : [];
   const likeCount = likes.length;
   const photo = String(post.authorPhoto || "").trim() || DEFAULT_AUTHOR_AVATAR;
-  const badge = post.badge || "Founder";
+  const badge = post.badge === "Founder" ? "Entrepreneur" : post.badge || "Entrepreneur";
 
   return (
     <article

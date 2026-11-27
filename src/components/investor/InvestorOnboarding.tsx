@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   TrendingUp,
   Undo2,
@@ -13,25 +14,34 @@ import {
   CreditCard,
   IdCard,
   Phone,
+  ArrowRight,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppState } from "@/hooks/useAppState";
 import { auth } from "@/firebase";
-import { commitInvestorProfile } from "@/services/investorCoreService";
-import { submitPendingKycReview } from "@/services/adminKycService";
 import {
   createEmailPasswordAndSendVerification,
   friendlyIdentityError,
+  VerificationDeliveryError,
+  reloadAndCheckEmailVerified,
 } from "@/services/identityVerificationService";
 import { EmailVerificationGate } from "@/components/auth/EmailVerificationGate";
-import { KycPendingGate } from "@/components/kyc/KycPendingGate";
+import { InvestorKycVerification, type InvestorKycStatus } from "@/components/investor/InvestorKycVerification";
+import { backendRequest } from "@/lib/backendClient";
 import { InvestorSignupCinema } from "@/components/investor/InvestorSignupCinema";
-import { CnicFaceVerify } from "@/components/verification/CnicFaceVerify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  syncStage1ToFirestore,
+} from "@/services/onboardingFirestoreService";
+import { sanitizeExtractedCnic } from "@/lib/kycOcrService";
+import {
+  clearLocalOnboardingSession,
+} from "@/lib/onboardingResume";
 
 type InvestorOnboardingProps = {
+  resume?: boolean;
   onBack: () => void;
 };
 
@@ -44,10 +54,6 @@ type InvestorFormData = {
   accountTitleName: string;
   accountNumber: string;
   phone: string;
-  cnicFront: string;
-  cnicBack: string;
-  liveSelfie: string;
-  faceMatchScore: number;
 };
 
 const EMPTY_FORM: InvestorFormData = {
@@ -59,10 +65,6 @@ const EMPTY_FORM: InvestorFormData = {
   accountTitleName: "",
   accountNumber: "",
   phone: "",
-  cnicFront: "",
-  cnicBack: "",
-  liveSelfie: "",
-  faceMatchScore: 0,
 };
 
 const PAKISTAN_BANKS = [
@@ -85,9 +87,6 @@ const PAKISTAN_BANKS = [
 /** Min 8 chars, ≥1 letter, ≥1 digit */
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 
-/** Pakistani CNIC: xxxxx-xxxxxxx-x or 13 digits */
-const CNIC_RULE = /^(?:\d{5}-\d{7}-\d|\d{13})$/;
-
 function getPasswordError(password: string): string {
   if (!password) return "Password is required.";
   if (password.length < 8) return "Password must be at least 8 characters.";
@@ -99,20 +98,8 @@ function getPasswordError(password: string): string {
   return "";
 }
 
-function getCnicError(cnic: string): string {
-  const trimmed = cnic.trim();
-  if (!trimmed) return "CNIC number is required.";
-  if (!CNIC_RULE.test(trimmed)) {
-    return "Enter a valid Pakistani CNIC (e.g. 34101-XXXXXXX-X or 13 digits).";
-  }
-  return "";
-}
-
-/**
- * Multi-step Investor Onboarding Wizard
- * Step 1 — credentials + email verify · Step 2 — CNIC/bank/phone/KYC · Step 3 — admin wait
- */
-export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
+export function InvestorOnboarding({ onBack, resume = false }: InvestorOnboardingProps) {
+  const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { registerInvestor, setIsLoggedIn } = useAppState();
 
@@ -123,9 +110,38 @@ export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
   const [passwordHint, setPasswordHint] = useState("");
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [awaitingEmailVerification, setAwaitingEmailVerification] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitDone, setSubmitDone] = useState(false);
-  const [registrationError, setRegistrationError] = useState("");
+  const [mailDelivery, setMailDelivery] = useState<"accepted" | "pending">("pending");
+  const [mailError, setMailError] = useState("");
+  const [alreadyVerified, setAlreadyVerified] = useState(false);
+  const [savingDetails, setSavingDetails] = useState(false);
+
+  useEffect(() => {
+    clearLocalOnboardingSession();
+  }, []);
+
+  useEffect(() => {
+    if (!resume || !currentUser?.uid) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        await currentUser.reload();
+        if (cancelled) return;
+        const email = currentUser.email || "";
+        setFormData((previous) => ({ ...previous, email }));
+        if (!currentUser.emailVerified) {
+          setAwaitingEmailVerification(true);
+          return;
+        }
+        await syncStage1ToFirestore({
+          uid: currentUser.uid, email, role: "investor", emailVerified: true,
+        });
+        if (!cancelled) setAlreadyVerified(true);
+      } catch (error) {
+        if (!cancelled) setStepError(friendlyIdentityError(error));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [resume, currentUser?.uid]);
 
   const setField = <K extends keyof InvestorFormData>(field: K, value: InvestorFormData[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value ?? ("" as InvestorFormData[K]) }));
@@ -137,14 +153,18 @@ export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
     if (stepError) setStepError("");
   };
 
-  const handleEmailVerified = useCallback(() => {
+  const handleEmailVerified = () => {
     setAwaitingEmailVerification(false);
-    setStep(2);
-  }, []);
+    setStep(3);
+  };
 
-  const validateStep1 = (): boolean => {
-    if (!formData.fullName.trim() || !formData.email.trim() || !formData.password) {
-      setStepError("Please fill in Full Name, Contact Email, and Password.");
+  const validateStage1 = (): boolean => {
+    if (!formData.fullName.trim()) {
+      setStepError("Please enter your full name.");
+      return false;
+    }
+    if (!formData.email.trim() || !formData.password) {
+      setStepError("Please fill in Contact Email and Password.");
       return false;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
@@ -162,227 +182,160 @@ export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
     return true;
   };
 
-  const validateStep2 = (): string => {
-    const cnicErr = getCnicError(formData.cnic);
-    if (cnicErr) return cnicErr;
+  const validateStage2 = (): string => {
+    const cnic = sanitizeExtractedCnic(formData.cnic);
+    if (!cnic) return "Valid CNIC number is required (XXXXX-XXXXXXX-X).";
     if (!formData.bankName.trim()) return "Please select a bank name.";
     if (!formData.accountTitleName.trim()) return "Account Title Name is required.";
     if (!formData.accountNumber.trim() || formData.accountNumber.trim().length < 8) {
       return "Enter a valid Account Number / IBAN.";
     }
     if (!formData.phone.trim()) return "Phone number is required.";
-    if (!formData.cnicFront || !formData.cnicBack || !formData.liveSelfie) {
-      return "Please complete biometric verification (CNIC Front, Back, and Live Selfie).";
-    }
-    if (formData.faceMatchScore < 70) {
-      return "Face match must be at least 70%. Capture a clearer live selfie and verify again.";
-    }
+    if (!formData.fullName.trim()) return "Full name from Stage 1 is missing.";
     return "";
   };
 
   const handleCreateAccountAndSendVerification = async () => {
-    if (!validateStep1()) return;
+    if (!validateStage1()) return;
 
     setIsCreatingAccount(true);
     setStepError("");
+    setMailError("");
+    setAlreadyVerified(false);
     try {
-      await createEmailPasswordAndSendVerification({
+      const user = await createEmailPasswordAndSendVerification({
+        role: "investor",
+        fullName: formData.fullName.trim(),
         email: formData.email.trim(),
         password: formData.password,
-        fullName: formData.fullName.trim(),
       });
+      if (user.emailVerified && await reloadAndCheckEmailVerified(formData.email, "investor")) {
+        setAlreadyVerified(true);
+        return;
+      }
+      setMailDelivery("accepted");
       setAwaitingEmailVerification(true);
     } catch (err: unknown) {
+      if (err instanceof VerificationDeliveryError) {
+        setMailDelivery("pending");
+        setMailError(err.message);
+        setAwaitingEmailVerification(true);
+        return;
+      }
       setStepError(friendlyIdentityError(err));
     } finally {
       setIsCreatingAccount(false);
     }
   };
 
-  const submitComplianceProfile = async () => {
-    const step2Err = validateStep2();
-    if (step2Err) {
-      setStepError(step2Err);
-      setRegistrationError(step2Err);
-      return;
-    }
-    setStepError("");
-
-    const uid = auth.currentUser?.uid;
-    if (!uid) {
-      setRegistrationError("Session missing. Please verify email again and continue.");
-      return;
-    }
-
-    setRegistrationError("");
-    setIsSubmitting(true);
-
-    const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string) =>
-      Promise.race([
-        promise,
-        new Promise<T>((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`${label} — timeout (${Math.round(ms / 1000)}s).`)),
-            ms,
-          ),
-        ),
-      ]);
-
-    try {
-      await withTimeout(
-        commitInvestorProfile(uid, {
-          fullName: formData.fullName.trim(),
-          email: formData.email.trim(),
-          password: formData.password,
-          cnic: formData.cnic.trim(),
-          bankDetails: {
-            bankName: formData.bankName.trim(),
-            accountTitle: formData.accountTitleName.trim(),
-            accountNumber: formData.accountNumber.trim(),
-          },
-          mobilePhoneForOtp: formData.phone.trim(),
-        }),
-        30000,
-        "Profile commit",
-      );
-
-      let cnicFrontUrl = formData.cnicFront;
-      let cnicBackUrl = formData.cnicBack;
-      let liveSelfieUrl = formData.liveSelfie;
-      try {
-        const { ensureCloudinaryUrl } = await import("@/lib/cloudinaryUpload");
-        const [f, b, s] = await Promise.all([
-          ensureCloudinaryUrl(formData.cnicFront, "cnic_verifications").catch(() => ""),
-          ensureCloudinaryUrl(formData.cnicBack, "cnic_verifications").catch(() => ""),
-          ensureCloudinaryUrl(formData.liveSelfie, "selfies").catch(() => ""),
-        ]);
-        if (f) cnicFrontUrl = f;
-        if (b) cnicBackUrl = b;
-        if (s) liveSelfieUrl = s;
-      } catch (uploadErr) {
-        console.warn("Investor KYC Cloudinary upload skipped:", uploadErr);
-      }
-
-      await submitPendingKycReview({
-        uid,
-        role: "investor",
-        fullName: formData.fullName.trim(),
-        email: formData.email.trim(),
-        phoneNumber: formData.phone.trim(),
-        cnic: formData.cnic.trim(),
-        bankName: formData.bankName.trim(),
-        accountTitle: formData.accountTitleName.trim(),
-        accountNumber: formData.accountNumber.trim(),
-        cnicFrontUrl,
-        cnicBackUrl,
-        liveSelfieUrl,
-        matchConfidenceScore: formData.faceMatchScore,
-      });
-
-      // Mirror to Firestore users/{uid}
-      try {
-        const { doc, setDoc, serverTimestamp } = await import("firebase/firestore");
-        const { firestore } = await import("@/firebase");
-        await setDoc(
-          doc(firestore, "users", uid),
-          {
-            role: "investor",
-            cnicFrontUrl,
-            cnicBackUrl,
-            liveSelfieUrl,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-      } catch {
-        /* non-fatal */
-      }
-
-      registerInvestor({
-        name: formData.fullName.trim(),
-        email: formData.email.trim(),
-        phone: formData.phone.trim(),
-        password: formData.password,
-        categories: ["General"],
-        budgetRange: "",
-        ticketSize: "",
-        location: "Pakistan",
-        strategy: `Bank: ${formData.bankName}`,
-        entityType: "Normal Person",
-        cnicFront: cnicFrontUrl,
-        cnicBack: cnicBackUrl,
-        liveSelfie: liveSelfieUrl,
-      });
-
-      setIsLoggedIn(true);
-      setSubmitDone(true);
-      setStep(3);
-    } catch (err: unknown) {
-      setRegistrationError(friendlyIdentityError(err));
-    } finally {
-      setIsSubmitting(false);
-    }
+  const enterDashboard = (status: InvestorKycStatus) => {
+    const user = auth.currentUser;
+    if (!user || status.stage !== 3 || !status.livenessPassed) return;
+    registerInvestor({
+      name: status.fullName,
+      email: user.email || "",
+      phone: formData.phone.trim(),
+      password: "",
+      categories: ["General"],
+      entityType: "Normal Person",
+      location: "Pakistan",
+    });
+    setIsLoggedIn(true);
+    navigate({ to: "/app/investor" });
   };
 
-  const gateUid = auth.currentUser?.uid || currentUser?.uid || "";
+  const handleSaveFinancialDetails = async () => {
+    const error = validateStage2();
+    if (error) { setStepError(error); return; }
+    const user = auth.currentUser;
+    if (!user) { setStepError("Sign in again to save banking details."); return; }
+    setSavingDetails(true);
+    setStepError("");
+    try {
+      await backendRequest(user, "/api/kyc/investor-details", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bankName: formData.bankName.trim(),
+          accountTitle: formData.accountTitleName.trim() || formData.fullName,
+          accountNumber: formData.accountNumber.trim(),
+          phone: formData.phone.trim(),
+        }),
+      });
+      setStep(3);
+    } catch (error) {
+      setStepError(friendlyIdentityError(error));
+    } finally {
+      setSavingDetails(false);
+    }
+  };
 
   return (
     <InvestorSignupCinema>
       <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-6 py-8">
-        {step < 3 && (
-          <div className="mb-8 flex items-center justify-between border-b border-white/20 pb-4 animate-in fade-in duration-300">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg">
-                <TrendingUp className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-200">
-                  Investor Desk Onboarding
-                </p>
-                <h2 className="font-display text-lg font-bold text-white">Capital Compliance Boarding</h2>
-              </div>
+        <div className="mb-8 flex items-center justify-between border-b border-white/20 pb-4 animate-in fade-in duration-300">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg">
+              <TrendingUp className="h-5 w-5" />
             </div>
-
-            <div className="flex items-center gap-1.5">
-              {[1, 2].map((s) => (
-                <div
-                  key={s}
-                  className={`h-2.5 rounded-full transition-all duration-300 ${
-                    s === step
-                      ? "w-8 bg-foreground"
-                      : s < step
-                        ? "w-2.5 bg-foreground/65"
-                        : "w-2.5 bg-secondary"
-                  }`}
-                />
-              ))}
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-200">
+                Investor Desk Onboarding
+              </p>
+              <h2 className="font-display text-lg font-bold text-white">
+                {step === 1 && "1. Credentials & Authentication"}
+                {step === 2 && "Optional banking details"}
+                {step === 3 && "Investor identity verification"}
+              </h2>
             </div>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onBack}
-              className="rounded-full h-8 w-8 text-muted-foreground hover:text-foreground"
-            >
-              <Undo2 className="h-3.5 w-3.5" />
-            </Button>
           </div>
-        )}
 
-        {/* STEP 1 — Credentials + email verification gate */}
+          <div className="flex items-center gap-1.5">
+            {[1, 2, 3].map((s) => (
+              <div
+                key={s}
+                className={`h-2.5 rounded-full transition-all duration-300 ${
+                  s === step
+                    ? "w-8 bg-foreground"
+                    : s < step
+                      ? "w-2.5 bg-foreground/65"
+                      : "w-2.5 bg-secondary"
+                }`}
+              />
+            ))}
+          </div>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onBack}
+            className="rounded-full h-8 w-8 text-muted-foreground hover:text-foreground"
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+
         {step === 1 && (
           <div className="rounded-3xl border border-white/25 bg-white/92 p-8 shadow-2xl shadow-black/20 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="mb-6">
               <h3 className="font-display text-xl font-bold">1. Personal & Account Credentials</h3>
               <p className="text-xs text-muted-foreground mt-1">
-                Setup your name, email, and secure credentials — then verify email before continuing.
+                Enter your full name, email, and password — then verify your email before continuing.
               </p>
             </div>
 
-            {awaitingEmailVerification ? (
-              <EmailVerificationGate
+            {alreadyVerified ? (
+              <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+                <h3 className="font-semibold">Email already verified</h3>
+                <p>Firebase confirmed {formData.email} was previously verified.</p>
+                <Button type="button" onClick={handleEmailVerified}>Continue to CNIC</Button>
+              </div>
+            ) : awaitingEmailVerification ? (
+              <EmailVerificationGate role="investor"
                 email={formData.email.trim()}
                 onVerified={handleEmailVerified}
+                delivery={mailDelivery}
+                deliveryError={mailError}
                 accentClassName="text-amber-600"
               />
             ) : (
@@ -394,6 +347,8 @@ export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
                   </Label>
                   <Input
                     id="inv-name"
+                    type="text"
+                    name="fullName"
                     placeholder="Enter your full name"
                     value={formData.fullName}
                     onChange={(e) => setField("fullName", e.target.value)}
@@ -457,7 +412,7 @@ export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
                   <Button
                     onClick={() => void handleCreateAccountAndSendVerification()}
                     disabled={isCreatingAccount}
-                    className="w-full bg-foreground text-background hover:opacity-90"
+                    className="w-full bg-foreground text-background hover:opacity-90 font-bold"
                   >
                     {isCreatingAccount ? (
                       <span className="flex items-center gap-1.5">
@@ -474,17 +429,21 @@ export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
           </div>
         )}
 
-        {/* STEP 2 — CNIC, banking, phone + biometric KYC */}
         {step === 2 && (
           <div className="rounded-3xl border border-white/25 bg-white/92 p-8 shadow-2xl shadow-black/20 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className="mb-6">
-              <h3 className="font-display text-xl font-bold flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-green-500 animate-pulse" />
-                2. Finances, CNIC &amp; Biometric Compliance
-              </h3>
-              <p className="text-xs text-muted-foreground mt-1">
-                Enter banking specs and upload CNIC + live selfie for regulatory review.
-              </p>
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h3 className="font-display text-xl font-bold flex items-center gap-2">
+                  <Landmark className="h-5 w-5 text-amber-600" />
+                  Optional banking details Details
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter CNIC, banking specs, and phone details after identity verification.
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setStep(3)} className="rounded-full">
+                Back
+              </Button>
             </div>
 
             <div className="space-y-4">
@@ -495,13 +454,11 @@ export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
                 </Label>
                 <Input
                   id="inv-cnic"
-                  inputMode="numeric"
-                  placeholder="e.g. 34101-XXXXXXX-X"
-                  value={formData.cnic}
-                  onChange={(e) => {
-                    setField("cnic", e.target.value);
-                    if (stepError) setStepError("");
-                  }}
+                  type="text"
+                  name="cnicNumber"
+                  value={formData.cnic || ""}
+                  placeholder="e.g. 34102-9612657-9"
+                  readOnly
                   required
                 />
               </div>
@@ -563,26 +520,6 @@ export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
                 </div>
               </div>
 
-              <CnicFaceVerify
-                accent="emerald"
-                onComplete={(r) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    cnicFront: r.cnicFront || "",
-                    cnicBack: r.cnicBack || "",
-                    liveSelfie: r.liveSelfie || "",
-                    faceMatchScore: r.matchConfidenceScore || r.faceMatchScore || 0,
-                  }))
-                }
-                onMatchFailed={() =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    liveSelfie: "",
-                    faceMatchScore: 0,
-                  }))
-                }
-              />
-
               <div className="space-y-1.5">
                 <Label htmlFor="inv-phone" className="flex items-center gap-1">
                   <Phone className="h-3.5 w-3.5 text-muted-foreground" /> Phone Number{" "}
@@ -601,36 +538,24 @@ export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
                 />
               </div>
 
-              <div className="pt-4 border-t border-border space-y-3">
-                {stepError ? (
-                  <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
-                    {stepError}
-                  </p>
-                ) : null}
-                {registrationError ? (
-                  <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {registrationError}
-                  </p>
-                ) : null}
+              {stepError ? (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                  {stepError}
+                </p>
+              ) : null}
+
+              <div className="pt-4 border-t border-border">
                 <Button
-                  onClick={() => void submitComplianceProfile()}
-                  disabled={
-                    isSubmitting ||
-                    submitDone ||
-                    formData.faceMatchScore < 70 ||
-                    !formData.liveSelfie
-                  }
-                  className="w-full bg-foreground text-background hover:opacity-90"
+                  onClick={() => void handleSaveFinancialDetails()}
+                  disabled={savingDetails}
+                  className="w-full bg-foreground text-background hover:opacity-90 font-bold"
                 >
-                  {submitDone ? (
-                    "Done, wait for admin approval"
-                  ) : isSubmitting ? (
+                  {savingDetails ? (
                     <span className="flex items-center gap-1.5">
-                      <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                      Analyzing compliance biometric records...
+                      <Loader2 className="h-4 w-4 animate-spin" /> Saving…
                     </span>
                   ) : (
-                    "Submit Profile for Regulatory Compliance Review"
+                    <>Save banking details <ArrowRight className="ml-2 h-4 w-4" /></>
                   )}
                 </Button>
               </div>
@@ -638,22 +563,19 @@ export function InvestorOnboarding({ onBack }: InvestorOnboardingProps) {
           </div>
         )}
 
-        {/* STEP 3 — Wait for admin approval */}
         {step === 3 && (
-          <div className="rounded-3xl border border-white/25 bg-white/92 p-8 shadow-2xl shadow-black/20 backdrop-blur-xl animate-in zoom-in-95 duration-400">
-            {gateUid ? (
-              <KycPendingGate
-                uid={gateUid}
-                role="investor"
-                email={formData.email}
-                approvedPath="/app/investor"
-              />
-            ) : (
-              <p className="text-center text-sm text-slate-500">
-                Session missing — please log in again after admin approval.
-              </p>
-            )}
-          </div>
+          <InvestorKycVerification
+            onDashboard={enterDashboard}
+            onProfileDetails={(status) => {
+              setFormData((form) => ({
+                ...form,
+                fullName: status.fullName || form.fullName,
+                cnic: status.cnicNumber || form.cnic,
+              }));
+              setStepError("");
+              setStep(2);
+            }}
+          />
         )}
       </div>
     </InvestorSignupCinema>

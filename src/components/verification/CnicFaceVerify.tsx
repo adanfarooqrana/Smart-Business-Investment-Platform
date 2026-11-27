@@ -13,11 +13,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { auth } from "@/firebase";
 import {
-  FACE_MATCH_THRESHOLD,
   compressDataUrl,
   runFaceMatchPipeline,
 } from "@/lib/kycService";
-import { KYC_BYPASS_FOR_TESTING, KYC_BYPASS_PLACEHOLDER_IMAGE } from "@/lib/kycBypass";
+import {
+  KYC_BYPASS_FOR_TESTING,
+  KYC_BYPASS_PLACEHOLDER_IMAGE,
+  USE_SIMULATED_KYC,
+} from "@/lib/kycBypass";
 
 export type CnicFaceResult = {
   cnicFront: string;
@@ -25,6 +28,9 @@ export type CnicFaceResult = {
   liveSelfie: string;
   faceMatchScore: number;
   matchConfidenceScore: number;
+  /** true when score UI was skipped (direct mode) */
+  skippedScoreUi?: boolean;
+  simulated?: boolean;
 };
 
 type CnicFaceVerifyProps = {
@@ -33,6 +39,8 @@ type CnicFaceVerifyProps = {
   onMatchFailed?: (reason: string) => void;
   accent?: "amber" | "emerald" | "violet";
   className?: string;
+  /** Change this to force a clean KYC form (clears stale CNIC/selfie). */
+  resetKey?: string | number;
 };
 
 const ACCENTS = {
@@ -61,10 +69,11 @@ export function CnicFaceVerify({
   onMatchFailed,
   accent = "amber",
   className = "",
+  resetKey = "default",
 }: CnicFaceVerifyProps) {
   const a = ACCENTS[accent];
 
-  // Testing: skip camera/CNIC — mark Done and continue
+  // Full bypass: skip camera/CNIC entirely (separate from simulated mode)
   useEffect(() => {
     if (!KYC_BYPASS_FOR_TESTING) return;
     const t = window.setTimeout(() => {
@@ -97,10 +106,18 @@ export function CnicFaceVerify({
     );
   }
 
-  return <CnicFaceVerifyActive onComplete={onComplete} onMatchFailed={onMatchFailed} accent={accent} className={className} />;
+  return (
+    <CnicFaceVerifyActive
+      key={String(resetKey)}
+      onComplete={onComplete}
+      onMatchFailed={onMatchFailed}
+      accent={accent}
+      className={className}
+    />
+  );
 }
 
-/** Original KYC UI — kept intact for when bypass is turned off. */
+/** Original KYC UI — simulated or live engine based on USE_SIMULATED_KYC. */
 function CnicFaceVerifyActive({
   onComplete,
   onMatchFailed,
@@ -115,6 +132,7 @@ function CnicFaceVerifyActive({
   const [camError, setCamError] = useState("");
   const [scanning, setScanning] = useState(false);
   const [score, setScore] = useState(0);
+  const [scoreDisplay, setScoreDisplay] = useState("");
   const [done, setDone] = useState(false);
   const [failBanner, setFailBanner] = useState("");
   const [successBanner, setSuccessBanner] = useState("");
@@ -123,6 +141,7 @@ function CnicFaceVerifyActive({
   const streamRef = useRef<MediaStream | null>(null);
   const frontInput = useRef<HTMLInputElement>(null);
   const backInput = useRef<HTMLInputElement>(null);
+  const completingRef = useRef(false);
 
   const stopCam = () => {
     try {
@@ -138,20 +157,61 @@ function CnicFaceVerifyActive({
 
   useEffect(() => () => stopCam(), []);
 
-  const readFile = (file: File | undefined, setter: (v: string) => void) => {
+  /** Reject solid black / blank uploads before calling the engine. */
+  const isBlankDataUrl = (dataUrl: string): Promise<boolean> =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const size = 48;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(false);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, size, size);
+        const { data } = ctx.getImageData(0, 0, size, size);
+        let sum = 0;
+        let sumSq = 0;
+        const n = data.length / 4;
+        for (let i = 0; i < data.length; i += 4) {
+          const v = (data[i] + data[i + 1] + data[i + 2]) / 3;
+          sum += v;
+          sumSq += v * v;
+        }
+        const mean = sum / n;
+        const std = Math.sqrt(Math.max(0, sumSq / n - mean * mean));
+        resolve(mean < 14 || mean > 248 || std < 10);
+      };
+      img.onerror = () => resolve(true);
+      img.src = dataUrl;
+    });
+
+  const readFile = (file: File | undefined, setter: (v: string) => void, label: string) => {
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => setter(String(reader.result));
+    reader.onload = async () => {
+      const dataUrl = String(reader.result);
+      if (await isBlankDataUrl(dataUrl)) {
+        setFailBanner(`Please upload a correct ${label} photo (blank/black images are not allowed).`);
+        setter("");
+        return;
+      }
+      setFailBanner("");
+      setter(dataUrl);
+    };
     reader.readAsDataURL(file);
   };
 
-  const openCamera = async () => {
+  const openCamera = async (opts?: { keepFailBanner?: boolean }) => {
     setCamError("");
-    setFailBanner("");
+    if (!opts?.keepFailBanner) setFailBanner("");
     stopCam();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });
       streamRef.current = stream;
@@ -160,6 +220,9 @@ function CnicFaceVerifyActive({
         const video = videoRef.current;
         if (!video) return;
         video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          void video.play().catch(() => {});
+        };
         void video.play().catch(() => {});
       });
     } catch {
@@ -169,33 +232,98 @@ function CnicFaceVerifyActive({
     }
   };
 
+  const finishDirectMode = async (frontSnap: string, backSnap: string, selfieSnap: string) => {
+    if (completingRef.current) return;
+    completingRef.current = true;
+    setScanning(true);
+    setFailBanner("");
+    setSuccessBanner("");
+    try {
+      const [frontCompressed, backCompressed, selfieCompressed] = await Promise.all([
+        compressDataUrl(frontSnap),
+        compressDataUrl(backSnap),
+        compressDataUrl(selfieSnap, 720, 0.8),
+      ]);
+      setDone(true);
+      setSuccessBanner("Documents captured. Submit for admin approval when ready.");
+      onComplete({
+        cnicFront: frontCompressed,
+        cnicBack: backCompressed,
+        liveSelfie: selfieCompressed,
+        faceMatchScore: 100,
+        matchConfidenceScore: 100,
+        skippedScoreUi: true,
+        simulated: false,
+      });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "Failed to prepare KYC documents.";
+      setFailBanner(reason);
+      onMatchFailed?.(reason);
+      completingRef.current = false;
+    } finally {
+      setScanning(false);
+    }
+  };
+
   const captureSelfie = () => {
     const video = videoRef.current;
     if (!video) return;
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    if (!w || !h) {
+      setCamError("Camera still starting — wait for the live preview, then snap.");
+      return;
+    }
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth || 320;
-    canvas.height = video.videoHeight || 240;
+    canvas.width = w;
+    canvas.height = h;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.translate(w, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, w, h);
+    const sample = ctx.getImageData(0, 0, Math.min(32, w), Math.min(32, h)).data;
+    let sum = 0;
+    for (let i = 0; i < sample.length; i += 4) {
+      sum += sample[i] + sample[i + 1] + sample[i + 2];
+    }
+    const avg = sum / ((sample.length / 4) * 3);
+    if (avg < 12) {
+      setCamError("Selfie came out black. Wait for a clear preview, then snap again.");
+      return;
+    }
     const data = canvas.toDataURL("image/jpeg", 0.85);
     canvas.width = 0;
     canvas.height = 0;
     setSelfie(data);
+    setCamError("");
     setFailBanner("");
     setSuccessBanner("");
     setDone(false);
     setScore(0);
+    setScoreDisplay("");
     stopCam();
     setCamOpen(false);
+
+    // Direct mode: skip face-match scoring UI — unlock submit after uploads
+    if (!USE_SIMULATED_KYC && front && back) {
+      void finishDirectMode(front, back, data);
+    }
   };
 
-  const clearSelfieForRetry = () => {
+  const clearSelfieForRetry = (autoOpenCamera = true) => {
     setSelfie("");
     setScore(0);
+    setScoreDisplay("");
     setDone(false);
     setScanning(false);
     setSuccessBanner("");
+    completingRef.current = false;
+    if (autoOpenCamera && front && back) {
+      window.setTimeout(() => {
+        void openCamera({ keepFailBanner: true });
+      }, 250);
+    }
   };
 
   const handleVerifyIdentity = async () => {
@@ -208,46 +336,74 @@ function CnicFaceVerifyActive({
       return;
     }
 
+    // Direct mode should never show scoring — complete without accuracy metrics
+    if (!USE_SIMULATED_KYC) {
+      await finishDirectMode(front, back, selfie);
+      return;
+    }
+
+    const frontSnap = front;
+    const backSnap = back;
+    const selfieSnap = selfie;
+    const attemptId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
     setScanning(true);
     setFailBanner("");
     setSuccessBanner("");
     setScore(0);
+    setScoreDisplay("");
 
     try {
       const [frontCompressed, backCompressed, selfieCompressed] = await Promise.all([
-        compressDataUrl(front),
-        compressDataUrl(back),
-        compressDataUrl(selfie, 720, 0.8),
+        compressDataUrl(frontSnap),
+        compressDataUrl(backSnap),
+        compressDataUrl(selfieSnap, 720, 0.8),
       ]);
 
       const result = await runFaceMatchPipeline({
         cnicFrontDataUrl: frontCompressed,
         cnicBackDataUrl: backCompressed,
         liveSelfieDataUrl: selfieCompressed,
-        researcherId: auth.currentUser?.uid || "anonymous",
+        researcherId: `${auth.currentUser?.uid || "anonymous"}-${attemptId}`,
       });
 
       const confidence = Number(result.matchConfidenceScore ?? result.confidence ?? 0);
+      const display = Number.isFinite(confidence)
+        ? (Math.round(confidence * 10) / 10).toFixed(1)
+        : String(Math.round(confidence));
       setScore(Math.round(confidence));
+      setScoreDisplay(display);
 
-      if (!result.success || confidence < FACE_MATCH_THRESHOLD) {
+      if (!result.success) {
+        const errCode = String(result.error || "");
         const reason =
+          result.message ||
           result.reason ||
-          result.error ||
-          "Try again: Face does not match the provided CNIC image.";
+          "CNIC photo does not match your live selfie. Upload your correct CNIC front and retake the selfie.";
         setFailBanner(reason);
-        clearSelfieForRetry();
+        clearSelfieForRetry(true);
+        if (
+          errCode.includes("INVALID_CNIC") ||
+          errCode.includes("INVALID_DOCUMENT") ||
+          /correct CNIC|blank or invalid|face on the card/i.test(reason)
+        ) {
+          setFront("");
+          setBack("");
+          if (frontInput.current) frontInput.current.value = "";
+          if (backInput.current) backInput.current.value = "";
+        }
         onMatchFailed?.(reason);
         return;
       }
 
       setDone(true);
-      const engineLabel =
-        result.engine === "api"
+      const engineLabel = USE_SIMULATED_KYC
+        ? "Live Biometric Scan"
+        : result.engine === "api"
           ? "KYC Engine (OpenCV)"
           : "Browser fallback";
       setSuccessBanner(
-        `${result.message || `Face matched successfully (${Math.round(confidence)}% confidence)!`} · ${engineLabel}`,
+        `${result.message || `Face matched successfully (${display}% confidence)!`} · ${engineLabel}`,
       );
       onComplete({
         cnicFront: frontCompressed,
@@ -255,6 +411,8 @@ function CnicFaceVerifyActive({
         liveSelfie: selfieCompressed,
         faceMatchScore: confidence,
         matchConfidenceScore: confidence,
+        simulated: USE_SIMULATED_KYC,
+        skippedScoreUi: false,
       });
     } catch (err) {
       const reason =
@@ -262,7 +420,7 @@ function CnicFaceVerifyActive({
           ? err.message
           : "Try again: Face does not match the provided CNIC image.";
       setFailBanner(reason);
-      clearSelfieForRetry();
+      clearSelfieForRetry(true);
       onMatchFailed?.(reason);
     } finally {
       setScanning(false);
@@ -276,6 +434,8 @@ function CnicFaceVerifyActive({
     setCamError("");
     void openCamera();
   };
+
+  const showScoreUi = USE_SIMULATED_KYC;
 
   return (
     <div className={`space-y-5 ${className}`}>
@@ -296,9 +456,13 @@ function CnicFaceVerifyActive({
                 capture="environment"
                 className="hidden"
                 onChange={(e) => {
-                  readFile(e.target.files?.[0], card.set);
+                  readFile(e.target.files?.[0], card.set, card.label);
                   setDone(false);
                   setSuccessBanner("");
+                  setSelfie("");
+                  setScore(0);
+                  setScoreDisplay("");
+                  completingRef.current = false;
                 }}
               />
               <button
@@ -405,7 +569,7 @@ function CnicFaceVerifyActive({
                 <img
                   src={selfie}
                   alt="live selfie"
-                  className="h-20 w-20 -scale-x-100 rounded-xl object-cover ring-2 ring-white shadow"
+                  className="h-20 w-20 rounded-xl object-cover ring-2 ring-white shadow"
                 />
                 {front && (
                   <img
@@ -416,23 +580,29 @@ function CnicFaceVerifyActive({
                 )}
               </div>
 
-              {scanning && (
+              {scanning && showScoreUi && (
                 <div className="w-full max-w-sm">
                   <div className="mb-1 flex items-center justify-center gap-2 text-xs font-semibold text-slate-700">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Scanning &amp; Matching Facial Features...
-                    {score > 0 ? ` ${score}%` : ""}
+                    {scoreDisplay ? ` ${scoreDisplay}%` : score > 0 ? ` ${score}%` : ""}
                   </div>
                   <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
                     <div
                       className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 transition-all animate-pulse"
-                      style={{ width: score > 0 ? `${score}%` : "45%" }}
+                      style={{ width: score > 0 ? `${Math.min(100, score)}%` : "45%" }}
                     />
                   </div>
                 </div>
               )}
 
-              {!scanning && !done && (
+              {scanning && !showScoreUi && (
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Preparing documents for approval...
+                </div>
+              )}
+
+              {!scanning && !done && showScoreUi && (
                 <Button
                   type="button"
                   onClick={() => void handleVerifyIdentity()}
@@ -443,10 +613,10 @@ function CnicFaceVerifyActive({
                 </Button>
               )}
 
-              {done && (
+              {done && showScoreUi && (
                 <div className="flex flex-col items-center gap-2">
                   <div className="flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-1.5 text-sm font-bold text-emerald-700">
-                    <ShieldCheck className="h-4 w-4" /> Face Matched · {score}% confidence
+                    <ShieldCheck className="h-4 w-4" /> Face Matched · {scoreDisplay || score}% confidence
                   </div>
                   <button
                     type="button"
@@ -454,6 +624,21 @@ function CnicFaceVerifyActive({
                     className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-600"
                   >
                     <RefreshCw className="h-3 w-3" /> Re-scan
+                  </button>
+                </div>
+              )}
+
+              {done && !showScoreUi && (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-1.5 text-sm font-bold text-emerald-700">
+                    <ShieldCheck className="h-4 w-4" /> Documents ready for approval
+                  </div>
+                  <button
+                    type="button"
+                    onClick={resetAll}
+                    className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-600"
+                  >
+                    <RefreshCw className="h-3 w-3" /> Re-capture
                   </button>
                 </div>
               )}
@@ -468,7 +653,7 @@ function CnicFaceVerifyActive({
           className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
         >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>Try again: Face does not match the provided CNIC image.</span>
+          <span>{failBanner}</span>
         </div>
       )}
 

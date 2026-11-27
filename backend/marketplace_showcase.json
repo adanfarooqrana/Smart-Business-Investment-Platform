@@ -1,0 +1,1660 @@
+{
+  "founders": [
+    {
+      "id": "showcase-bakery",
+      "category": "Food & Bakery",
+      "businessName": "Ember Crumb Bakery",
+      "founderName": "Noor Tariq",
+      "location": "Lahore",
+      "education": "Culinary Arts",
+      "verified": true,
+      "demo": true,
+      "image": "/marketplace/showcase-bakery.webp",
+      "reviews": 94,
+      "mobile": "Demo profile",
+      "photoId": 774909
+    },
+    {
+      "id": "showcase-rice",
+      "category": "Rice / Agriculture",
+      "businessName": "Mehran Grain Works",
+      "founderName": "Hassan Ali",
+      "location": "Multan",
+      "education": "Agricultural Sciences",
+      "verified": true,
+      "demo": true,
+      "image": "/marketplace/showcase-rice.webp",
+      "reviews": 95,
+      "mobile": "Demo profile",
+      "photoId": 220453
+    },
+    {
+      "id": "showcase-saas",
+      "category": "SaaS / Tech",
+      "businessName": "KiteStack Labs",
+      "founderName": "Areeba Malik",
+      "location": "Islamabad",
+      "education": "Computer Science",
+      "verified": true,
+      "demo": true,
+      "image": "/marketplace/showcase-saas.webp",
+      "reviews": 96,
+      "mobile": "Demo profile",
+      "photoId": 1239291
+    },
+    {
+      "id": "showcase-dairy",
+      "category": "Dairy & Cold-Chain",
+      "businessName": "Northline Dairy",
+      "founderName": "Bilal Saeed",
+      "location": "Sahiwal",
+      "education": "Food Technology",
+      "verified": true,
+      "demo": true,
+      "image": "/marketplace/showcase-dairy.webp",
+      "reviews": 97,
+      "mobile": "Demo profile",
+      "photoId": 2379004
+    },
+    {
+      "id": "showcase-organic",
+      "category": "Organic FMCG",
+      "businessName": "Field & Bloom",
+      "founderName": "Mina Qureshi",
+      "location": "Karachi",
+      "education": "Business Administration",
+      "verified": true,
+      "demo": true,
+      "image": "/marketplace/showcase-organic.webp",
+      "reviews": 98,
+      "mobile": "Demo profile",
+      "photoId": 1181686
+    }
+  ],
+  "products": [
+    {
+      "id": "bakery-1",
+      "founderId": "showcase-bakery",
+      "title": "Sourdough Loaf",
+      "category": "Food & Bakery",
+      "location": "Lahore",
+      "photoId": 1775043,
+      "image": "/marketplace/bakery-1.webp",
+      "pricePerChunk": 1425,
+      "totalProductChunks": 120,
+      "soldChunks": 45,
+      "averageRevenuePkr": 57000,
+      "profitPerChunk": 95,
+      "founderNetPkr": 21375,
+      "investorCount": 7,
+      "investorReview": 95,
+      "targetAgeGroup": "18+",
+      "materials": "Sourdough Loaf | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative food & bakery product from Ember Crumb Bakery.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "bakery-2",
+      "founderId": "showcase-bakery",
+      "title": "Butter Croissants",
+      "category": "Food & Bakery",
+      "location": "Lahore",
+      "photoId": 3892469,
+      "image": "/marketplace/bakery-2.webp",
+      "pricePerChunk": 1600,
+      "totalProductChunks": 140,
+      "soldChunks": 53,
+      "averageRevenuePkr": 74666,
+      "profitPerChunk": 106,
+      "founderNetPkr": 28000,
+      "investorCount": 8,
+      "investorReview": 95,
+      "targetAgeGroup": "18+",
+      "materials": "Butter Croissants | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative food & bakery product from Ember Crumb Bakery.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "bakery-3",
+      "founderId": "showcase-bakery",
+      "title": "Dark Chocolate Cake",
+      "category": "Food & Bakery",
+      "location": "Lahore",
+      "photoId": 291528,
+      "image": "/marketplace/bakery-3.webp",
+      "pricePerChunk": 1775,
+      "totalProductChunks": 160,
+      "soldChunks": 160,
+      "averageRevenuePkr": 94666,
+      "profitPerChunk": 118,
+      "founderNetPkr": 35500,
+      "investorCount": 9,
+      "investorReview": 95,
+      "targetAgeGroup": "18+",
+      "materials": "Dark Chocolate Cake | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative food & bakery product from Ember Crumb Bakery.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "bakery-4",
+      "founderId": "showcase-bakery",
+      "title": "Pistachio Cookies",
+      "category": "Food & Bakery",
+      "location": "Lahore",
+      "photoId": 890577,
+      "image": "/marketplace/bakery-4.webp",
+      "pricePerChunk": 1950,
+      "totalProductChunks": 180,
+      "soldChunks": 180,
+      "averageRevenuePkr": 117000,
+      "profitPerChunk": 130,
+      "founderNetPkr": 43875,
+      "investorCount": 10,
+      "investorReview": 95,
+      "targetAgeGroup": "18+",
+      "materials": "Pistachio Cookies | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative food & bakery product from Ember Crumb Bakery.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "bakery-5",
+      "founderId": "showcase-bakery",
+      "title": "Brioche Buns",
+      "category": "Food & Bakery",
+      "location": "Lahore",
+      "photoId": 1775037,
+      "image": "/marketplace/bakery-5.webp",
+      "pricePerChunk": 2125,
+      "totalProductChunks": 200,
+      "soldChunks": 200,
+      "averageRevenuePkr": 141666,
+      "profitPerChunk": 141,
+      "founderNetPkr": 53125,
+      "investorCount": 11,
+      "investorReview": 95,
+      "targetAgeGroup": "18+",
+      "materials": "Brioche Buns | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative food & bakery product from Ember Crumb Bakery.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "bakery-6",
+      "founderId": "showcase-bakery",
+      "title": "Cinnamon Rolls",
+      "category": "Food & Bakery",
+      "location": "Lahore",
+      "photoId": 267308,
+      "image": "/marketplace/bakery-6.webp",
+      "pricePerChunk": 2300,
+      "totalProductChunks": 220,
+      "soldChunks": 220,
+      "averageRevenuePkr": 168666,
+      "profitPerChunk": 153,
+      "founderNetPkr": 63250,
+      "investorCount": 12,
+      "investorReview": 95,
+      "targetAgeGroup": "18+",
+      "materials": "Cinnamon Rolls | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative food & bakery product from Ember Crumb Bakery.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "bakery-7",
+      "founderId": "showcase-bakery",
+      "title": "Seeded Rye",
+      "category": "Food & Bakery",
+      "location": "Lahore",
+      "photoId": 1070946,
+      "image": "/marketplace/bakery-7.webp",
+      "pricePerChunk": 2475,
+      "totalProductChunks": 240,
+      "soldChunks": 240,
+      "averageRevenuePkr": 198000,
+      "profitPerChunk": 165,
+      "founderNetPkr": 74250,
+      "investorCount": 13,
+      "investorReview": 95,
+      "targetAgeGroup": "18+",
+      "materials": "Seeded Rye | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative food & bakery product from Ember Crumb Bakery.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "bakery-8",
+      "founderId": "showcase-bakery",
+      "title": "Berry Tart",
+      "category": "Food & Bakery",
+      "location": "Lahore",
+      "photoId": 1126359,
+      "image": "/marketplace/bakery-8.webp",
+      "pricePerChunk": 2650,
+      "totalProductChunks": 260,
+      "soldChunks": 260,
+      "averageRevenuePkr": 229666,
+      "profitPerChunk": 176,
+      "founderNetPkr": 86125,
+      "investorCount": 14,
+      "investorReview": 95,
+      "targetAgeGroup": "18+",
+      "materials": "Berry Tart | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative food & bakery product from Ember Crumb Bakery.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "bakery-9",
+      "founderId": "showcase-bakery",
+      "title": "Date Loaf",
+      "category": "Food & Bakery",
+      "location": "Lahore",
+      "photoId": 205961,
+      "image": "/marketplace/bakery-9.webp",
+      "pricePerChunk": 2825,
+      "totalProductChunks": 280,
+      "soldChunks": 280,
+      "averageRevenuePkr": 263666,
+      "profitPerChunk": 188,
+      "founderNetPkr": 98875,
+      "investorCount": 15,
+      "investorReview": 95,
+      "targetAgeGroup": "18+",
+      "materials": "Date Loaf | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative food & bakery product from Ember Crumb Bakery.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "rice-1",
+      "founderId": "showcase-rice",
+      "title": "Aged Basmati",
+      "category": "Rice / Agriculture",
+      "location": "Multan",
+      "photoId": 4110250,
+      "image": "/marketplace/rice-1.webp",
+      "pricePerChunk": 2325,
+      "totalProductChunks": 120,
+      "soldChunks": 45,
+      "averageRevenuePkr": 93000,
+      "profitPerChunk": 155,
+      "founderNetPkr": 34875,
+      "investorCount": 7,
+      "investorReview": 96,
+      "targetAgeGroup": "18+",
+      "materials": "Aged Basmati | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative rice / agriculture product from Mehran Grain Works.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "rice-2",
+      "founderId": "showcase-rice",
+      "title": "Brown Rice",
+      "category": "Rice / Agriculture",
+      "location": "Multan",
+      "photoId": 723198,
+      "image": "/marketplace/rice-2.webp",
+      "pricePerChunk": 2500,
+      "totalProductChunks": 140,
+      "soldChunks": 140,
+      "averageRevenuePkr": 116666,
+      "profitPerChunk": 166,
+      "founderNetPkr": 43750,
+      "investorCount": 8,
+      "investorReview": 96,
+      "targetAgeGroup": "18+",
+      "materials": "Brown Rice | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative rice / agriculture product from Mehran Grain Works.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "rice-3",
+      "founderId": "showcase-rice",
+      "title": "Golden Sella",
+      "category": "Rice / Agriculture",
+      "location": "Multan",
+      "photoId": 4198019,
+      "image": "/marketplace/rice-3.webp",
+      "pricePerChunk": 2675,
+      "totalProductChunks": 160,
+      "soldChunks": 160,
+      "averageRevenuePkr": 142666,
+      "profitPerChunk": 178,
+      "founderNetPkr": 53500,
+      "investorCount": 9,
+      "investorReview": 96,
+      "targetAgeGroup": "18+",
+      "materials": "Golden Sella | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative rice / agriculture product from Mehran Grain Works.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "rice-4",
+      "founderId": "showcase-rice",
+      "title": "Rice Flour",
+      "category": "Rice / Agriculture",
+      "location": "Multan",
+      "photoId": 143133,
+      "image": "/marketplace/rice-4.webp",
+      "pricePerChunk": 2850,
+      "totalProductChunks": 180,
+      "soldChunks": 180,
+      "averageRevenuePkr": 171000,
+      "profitPerChunk": 190,
+      "founderNetPkr": 64125,
+      "investorCount": 10,
+      "investorReview": 96,
+      "targetAgeGroup": "18+",
+      "materials": "Rice Flour | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative rice / agriculture product from Mehran Grain Works.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "rice-5",
+      "founderId": "showcase-rice",
+      "title": "Seed Grain Pack",
+      "category": "Rice / Agriculture",
+      "location": "Multan",
+      "photoId": 2165688,
+      "image": "/marketplace/rice-5.webp",
+      "pricePerChunk": 3025,
+      "totalProductChunks": 200,
+      "soldChunks": 200,
+      "averageRevenuePkr": 201666,
+      "profitPerChunk": 201,
+      "founderNetPkr": 75625,
+      "investorCount": 11,
+      "investorReview": 96,
+      "targetAgeGroup": "18+",
+      "materials": "Seed Grain Pack | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative rice / agriculture product from Mehran Grain Works.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "rice-6",
+      "founderId": "showcase-rice",
+      "title": "Rice Bran Feed",
+      "category": "Rice / Agriculture",
+      "location": "Multan",
+      "photoId": 326082,
+      "image": "/marketplace/rice-6.webp",
+      "pricePerChunk": 3200,
+      "totalProductChunks": 220,
+      "soldChunks": 220,
+      "averageRevenuePkr": 234666,
+      "profitPerChunk": 213,
+      "founderNetPkr": 88000,
+      "investorCount": 12,
+      "investorReview": 96,
+      "targetAgeGroup": "18+",
+      "materials": "Rice Bran Feed | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative rice / agriculture product from Mehran Grain Works.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "rice-7",
+      "founderId": "showcase-rice",
+      "title": "Harvest Storage Bag",
+      "category": "Rice / Agriculture",
+      "location": "Multan",
+      "photoId": 164504,
+      "image": "/marketplace/rice-7.webp",
+      "pricePerChunk": 3375,
+      "totalProductChunks": 240,
+      "soldChunks": 240,
+      "averageRevenuePkr": 270000,
+      "profitPerChunk": 225,
+      "founderNetPkr": 101250,
+      "investorCount": 13,
+      "investorReview": 96,
+      "targetAgeGroup": "18+",
+      "materials": "Harvest Storage Bag | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative rice / agriculture product from Mehran Grain Works.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "rice-8",
+      "founderId": "showcase-rice",
+      "title": "Organic Lentils",
+      "category": "Rice / Agriculture",
+      "location": "Multan",
+      "photoId": 6157055,
+      "image": "/marketplace/rice-8.webp",
+      "pricePerChunk": 3550,
+      "totalProductChunks": 260,
+      "soldChunks": 260,
+      "averageRevenuePkr": 307666,
+      "profitPerChunk": 236,
+      "founderNetPkr": 115375,
+      "investorCount": 14,
+      "investorReview": 96,
+      "targetAgeGroup": "18+",
+      "materials": "Organic Lentils | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative rice / agriculture product from Mehran Grain Works.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "rice-9",
+      "founderId": "showcase-rice",
+      "title": "White Rice",
+      "category": "Rice / Agriculture",
+      "location": "Multan",
+      "photoId": 2474658,
+      "image": "/marketplace/rice-9.webp",
+      "pricePerChunk": 3725,
+      "totalProductChunks": 280,
+      "soldChunks": 280,
+      "averageRevenuePkr": 347666,
+      "profitPerChunk": 248,
+      "founderNetPkr": 130375,
+      "investorCount": 15,
+      "investorReview": 96,
+      "targetAgeGroup": "18+",
+      "materials": "White Rice | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative rice / agriculture product from Mehran Grain Works.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "saas-1",
+      "founderId": "showcase-saas",
+      "title": "Retail Analytics",
+      "category": "SaaS / Tech",
+      "location": "Islamabad",
+      "photoId": 3183150,
+      "image": "/marketplace/saas-1.webp",
+      "pricePerChunk": 3225,
+      "totalProductChunks": 120,
+      "soldChunks": 45,
+      "averageRevenuePkr": 129000,
+      "profitPerChunk": 215,
+      "founderNetPkr": 48375,
+      "investorCount": 7,
+      "investorReview": 97,
+      "targetAgeGroup": "18+",
+      "materials": "Retail Analytics | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative saas / tech product from KiteStack Labs.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "saas-2",
+      "founderId": "showcase-saas",
+      "title": "Cloud Invoicing",
+      "category": "SaaS / Tech",
+      "location": "Islamabad",
+      "photoId": 265087,
+      "image": "/marketplace/saas-2.webp",
+      "pricePerChunk": 3400,
+      "totalProductChunks": 140,
+      "soldChunks": 140,
+      "averageRevenuePkr": 158666,
+      "profitPerChunk": 226,
+      "founderNetPkr": 59500,
+      "investorCount": 8,
+      "investorReview": 97,
+      "targetAgeGroup": "18+",
+      "materials": "Cloud Invoicing | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative saas / tech product from KiteStack Labs.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "saas-3",
+      "founderId": "showcase-saas",
+      "title": "Delivery Console",
+      "category": "SaaS / Tech",
+      "location": "Islamabad",
+      "photoId": 669996,
+      "image": "/marketplace/saas-3.webp",
+      "pricePerChunk": 3575,
+      "totalProductChunks": 160,
+      "soldChunks": 160,
+      "averageRevenuePkr": 190666,
+      "profitPerChunk": 238,
+      "founderNetPkr": 71500,
+      "investorCount": 9,
+      "investorReview": 97,
+      "targetAgeGroup": "18+",
+      "materials": "Delivery Console | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative saas / tech product from KiteStack Labs.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "saas-4",
+      "founderId": "showcase-saas",
+      "title": "Team Scheduler",
+      "category": "SaaS / Tech",
+      "location": "Islamabad",
+      "photoId": 3861958,
+      "image": "/marketplace/saas-4.webp",
+      "pricePerChunk": 3750,
+      "totalProductChunks": 180,
+      "soldChunks": 180,
+      "averageRevenuePkr": 225000,
+      "profitPerChunk": 250,
+      "founderNetPkr": 84375,
+      "investorCount": 10,
+      "investorReview": 97,
+      "targetAgeGroup": "18+",
+      "materials": "Team Scheduler | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative saas / tech product from KiteStack Labs.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "saas-5",
+      "founderId": "showcase-saas",
+      "title": "Inventory Sync",
+      "category": "SaaS / Tech",
+      "location": "Islamabad",
+      "photoId": 1181675,
+      "image": "/marketplace/saas-5.webp",
+      "pricePerChunk": 3925,
+      "totalProductChunks": 200,
+      "soldChunks": 200,
+      "averageRevenuePkr": 261666,
+      "profitPerChunk": 261,
+      "founderNetPkr": 98125,
+      "investorCount": 11,
+      "investorReview": 97,
+      "targetAgeGroup": "18+",
+      "materials": "Inventory Sync | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative saas / tech product from KiteStack Labs.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "saas-6",
+      "founderId": "showcase-saas",
+      "title": "Online Store Kit",
+      "category": "SaaS / Tech",
+      "location": "Islamabad",
+      "photoId": 196644,
+      "image": "/marketplace/saas-6.webp",
+      "pricePerChunk": 4100,
+      "totalProductChunks": 220,
+      "soldChunks": 220,
+      "averageRevenuePkr": 300666,
+      "profitPerChunk": 273,
+      "founderNetPkr": 112750,
+      "investorCount": 12,
+      "investorReview": 97,
+      "targetAgeGroup": "18+",
+      "materials": "Online Store Kit | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative saas / tech product from KiteStack Labs.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "saas-7",
+      "founderId": "showcase-saas",
+      "title": "Workflow AI",
+      "category": "SaaS / Tech",
+      "location": "Islamabad",
+      "photoId": 3861969,
+      "image": "/marketplace/saas-7.webp",
+      "pricePerChunk": 4275,
+      "totalProductChunks": 240,
+      "soldChunks": 240,
+      "averageRevenuePkr": 342000,
+      "profitPerChunk": 285,
+      "founderNetPkr": 128250,
+      "investorCount": 13,
+      "investorReview": 97,
+      "targetAgeGroup": "18+",
+      "materials": "Workflow AI | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative saas / tech product from KiteStack Labs.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "saas-8",
+      "founderId": "showcase-saas",
+      "title": "Support Desk",
+      "category": "SaaS / Tech",
+      "location": "Islamabad",
+      "photoId": 270348,
+      "image": "/marketplace/saas-8.webp",
+      "pricePerChunk": 4450,
+      "totalProductChunks": 260,
+      "soldChunks": 260,
+      "averageRevenuePkr": 385666,
+      "profitPerChunk": 296,
+      "founderNetPkr": 144625,
+      "investorCount": 14,
+      "investorReview": 97,
+      "targetAgeGroup": "18+",
+      "materials": "Support Desk | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative saas / tech product from KiteStack Labs.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "saas-9",
+      "founderId": "showcase-saas",
+      "title": "Revenue Monitor",
+      "category": "SaaS / Tech",
+      "location": "Islamabad",
+      "photoId": 590016,
+      "image": "/marketplace/saas-9.webp",
+      "pricePerChunk": 4625,
+      "totalProductChunks": 280,
+      "soldChunks": 280,
+      "averageRevenuePkr": 431666,
+      "profitPerChunk": 308,
+      "founderNetPkr": 161875,
+      "investorCount": 15,
+      "investorReview": 97,
+      "targetAgeGroup": "18+",
+      "materials": "Revenue Monitor | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative saas / tech product from KiteStack Labs.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "dairy-1",
+      "founderId": "showcase-dairy",
+      "title": "Chilled Milk",
+      "category": "Dairy & Cold-Chain",
+      "location": "Sahiwal",
+      "photoId": 248412,
+      "image": "/marketplace/dairy-1.webp",
+      "pricePerChunk": 4125,
+      "totalProductChunks": 120,
+      "soldChunks": 45,
+      "averageRevenuePkr": 165000,
+      "profitPerChunk": 275,
+      "founderNetPkr": 61875,
+      "investorCount": 7,
+      "investorReview": 98,
+      "targetAgeGroup": "18+",
+      "materials": "Chilled Milk | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative dairy & cold-chain product from Northline Dairy.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "dairy-2",
+      "founderId": "showcase-dairy",
+      "title": "Greek Yogurt",
+      "category": "Dairy & Cold-Chain",
+      "location": "Sahiwal",
+      "photoId": 5949838,
+      "image": "/marketplace/dairy-2.webp",
+      "pricePerChunk": 4300,
+      "totalProductChunks": 140,
+      "soldChunks": 140,
+      "averageRevenuePkr": 200666,
+      "profitPerChunk": 286,
+      "founderNetPkr": 75250,
+      "investorCount": 8,
+      "investorReview": 98,
+      "targetAgeGroup": "18+",
+      "materials": "Greek Yogurt | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative dairy & cold-chain product from Northline Dairy.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "dairy-3",
+      "founderId": "showcase-dairy",
+      "title": "Cultured Butter",
+      "category": "Dairy & Cold-Chain",
+      "location": "Sahiwal",
+      "photoId": 7966397,
+      "image": "/marketplace/dairy-3.webp",
+      "pricePerChunk": 4475,
+      "totalProductChunks": 160,
+      "soldChunks": 160,
+      "averageRevenuePkr": 238666,
+      "profitPerChunk": 298,
+      "founderNetPkr": 89500,
+      "investorCount": 9,
+      "investorReview": 98,
+      "targetAgeGroup": "18+",
+      "materials": "Cultured Butter | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative dairy & cold-chain product from Northline Dairy.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "dairy-4",
+      "founderId": "showcase-dairy",
+      "title": "Soft Cheese",
+      "category": "Dairy & Cold-Chain",
+      "location": "Sahiwal",
+      "photoId": 821365,
+      "image": "/marketplace/dairy-4.webp",
+      "pricePerChunk": 4650,
+      "totalProductChunks": 180,
+      "soldChunks": 180,
+      "averageRevenuePkr": 279000,
+      "profitPerChunk": 310,
+      "founderNetPkr": 104625,
+      "investorCount": 10,
+      "investorReview": 98,
+      "targetAgeGroup": "18+",
+      "materials": "Soft Cheese | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative dairy & cold-chain product from Northline Dairy.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "dairy-5",
+      "founderId": "showcase-dairy",
+      "title": "Cream Pack",
+      "category": "Dairy & Cold-Chain",
+      "location": "Sahiwal",
+      "photoId": 416978,
+      "image": "/marketplace/dairy-5.webp",
+      "pricePerChunk": 4825,
+      "totalProductChunks": 200,
+      "soldChunks": 200,
+      "averageRevenuePkr": 321666,
+      "profitPerChunk": 321,
+      "founderNetPkr": 120625,
+      "investorCount": 11,
+      "investorReview": 98,
+      "targetAgeGroup": "18+",
+      "materials": "Cream Pack | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative dairy & cold-chain product from Northline Dairy.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "dairy-6",
+      "founderId": "showcase-dairy",
+      "title": "Milk Delivery Kit",
+      "category": "Dairy & Cold-Chain",
+      "location": "Sahiwal",
+      "photoId": 773253,
+      "image": "/marketplace/dairy-6.webp",
+      "pricePerChunk": 5000,
+      "totalProductChunks": 220,
+      "soldChunks": 220,
+      "averageRevenuePkr": 366666,
+      "profitPerChunk": 333,
+      "founderNetPkr": 137500,
+      "investorCount": 12,
+      "investorReview": 98,
+      "targetAgeGroup": "18+",
+      "materials": "Milk Delivery Kit | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative dairy & cold-chain product from Northline Dairy.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "dairy-7",
+      "founderId": "showcase-dairy",
+      "title": "Cold Storage Crate",
+      "category": "Dairy & Cold-Chain",
+      "location": "Sahiwal",
+      "photoId": 4483608,
+      "image": "/marketplace/dairy-7.webp",
+      "pricePerChunk": 5175,
+      "totalProductChunks": 240,
+      "soldChunks": 240,
+      "averageRevenuePkr": 414000,
+      "profitPerChunk": 345,
+      "founderNetPkr": 155250,
+      "investorCount": 13,
+      "investorReview": 98,
+      "targetAgeGroup": "18+",
+      "materials": "Cold Storage Crate | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative dairy & cold-chain product from Northline Dairy.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "dairy-8",
+      "founderId": "showcase-dairy",
+      "title": "Farmhouse Yogurt",
+      "category": "Dairy & Cold-Chain",
+      "location": "Sahiwal",
+      "photoId": 1132047,
+      "image": "/marketplace/dairy-8.webp",
+      "pricePerChunk": 5350,
+      "totalProductChunks": 260,
+      "soldChunks": 260,
+      "averageRevenuePkr": 463666,
+      "profitPerChunk": 356,
+      "founderNetPkr": 173875,
+      "investorCount": 14,
+      "investorReview": 98,
+      "targetAgeGroup": "18+",
+      "materials": "Farmhouse Yogurt | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative dairy & cold-chain product from Northline Dairy.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "organic-1",
+      "founderId": "showcase-organic",
+      "title": "Wildflower Honey",
+      "category": "Organic FMCG",
+      "location": "Karachi",
+      "photoId": 1638280,
+      "image": "/marketplace/organic-1.webp",
+      "pricePerChunk": 5025,
+      "totalProductChunks": 120,
+      "soldChunks": 45,
+      "averageRevenuePkr": 201000,
+      "profitPerChunk": 335,
+      "founderNetPkr": 75375,
+      "investorCount": 7,
+      "investorReview": 99,
+      "targetAgeGroup": "18+",
+      "materials": "Wildflower Honey | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative organic fmcg product from Field & Bloom.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "organic-2",
+      "founderId": "showcase-organic",
+      "title": "Cold-Pressed Oil",
+      "category": "Organic FMCG",
+      "location": "Karachi",
+      "photoId": 725998,
+      "image": "/marketplace/organic-2.webp",
+      "pricePerChunk": 5200,
+      "totalProductChunks": 140,
+      "soldChunks": 140,
+      "averageRevenuePkr": 242666,
+      "profitPerChunk": 346,
+      "founderNetPkr": 91000,
+      "investorCount": 8,
+      "investorReview": 99,
+      "targetAgeGroup": "18+",
+      "materials": "Cold-Pressed Oil | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative organic fmcg product from Field & Bloom.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "organic-3",
+      "founderId": "showcase-organic",
+      "title": "Herbal Tea",
+      "category": "Organic FMCG",
+      "location": "Karachi",
+      "photoId": 230477,
+      "image": "/marketplace/organic-3.webp",
+      "pricePerChunk": 5375,
+      "totalProductChunks": 160,
+      "soldChunks": 160,
+      "averageRevenuePkr": 286666,
+      "profitPerChunk": 358,
+      "founderNetPkr": 107500,
+      "investorCount": 9,
+      "investorReview": 99,
+      "targetAgeGroup": "18+",
+      "materials": "Herbal Tea | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative organic fmcg product from Field & Bloom.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "organic-4",
+      "founderId": "showcase-organic",
+      "title": "Orchard Jam",
+      "category": "Organic FMCG",
+      "location": "Karachi",
+      "photoId": 793785,
+      "image": "/marketplace/organic-4.webp",
+      "pricePerChunk": 5550,
+      "totalProductChunks": 180,
+      "soldChunks": 180,
+      "averageRevenuePkr": 333000,
+      "profitPerChunk": 370,
+      "founderNetPkr": 124875,
+      "investorCount": 10,
+      "investorReview": 99,
+      "targetAgeGroup": "18+",
+      "materials": "Orchard Jam | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative organic fmcg product from Field & Bloom.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "organic-5",
+      "founderId": "showcase-organic",
+      "title": "Farmhouse Soap",
+      "category": "Organic FMCG",
+      "location": "Karachi",
+      "photoId": 6621462,
+      "image": "/marketplace/organic-5.webp",
+      "pricePerChunk": 5725,
+      "totalProductChunks": 200,
+      "soldChunks": 200,
+      "averageRevenuePkr": 381666,
+      "profitPerChunk": 381,
+      "founderNetPkr": 143125,
+      "investorCount": 11,
+      "investorReview": 99,
+      "targetAgeGroup": "18+",
+      "materials": "Farmhouse Soap | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative organic fmcg product from Field & Bloom.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "organic-6",
+      "founderId": "showcase-organic",
+      "title": "Oat Granola",
+      "category": "Organic FMCG",
+      "location": "Karachi",
+      "photoId": 1435907,
+      "image": "/marketplace/organic-6.webp",
+      "pricePerChunk": 5900,
+      "totalProductChunks": 220,
+      "soldChunks": 220,
+      "averageRevenuePkr": 432666,
+      "profitPerChunk": 393,
+      "founderNetPkr": 162250,
+      "investorCount": 12,
+      "investorReview": 99,
+      "targetAgeGroup": "18+",
+      "materials": "Oat Granola | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative organic fmcg product from Field & Bloom.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "organic-7",
+      "founderId": "showcase-organic",
+      "title": "Dried Fruit",
+      "category": "Organic FMCG",
+      "location": "Karachi",
+      "photoId": 1295572,
+      "image": "/marketplace/organic-7.webp",
+      "pricePerChunk": 6075,
+      "totalProductChunks": 240,
+      "soldChunks": 240,
+      "averageRevenuePkr": 486000,
+      "profitPerChunk": 405,
+      "founderNetPkr": 182250,
+      "investorCount": 13,
+      "investorReview": 99,
+      "targetAgeGroup": "18+",
+      "materials": "Dried Fruit | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative organic fmcg product from Field & Bloom.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "organic-8",
+      "founderId": "showcase-organic",
+      "title": "Sea Salt Scrub",
+      "category": "Organic FMCG",
+      "location": "Karachi",
+      "photoId": 3735218,
+      "image": "/marketplace/organic-8.webp",
+      "pricePerChunk": 6250,
+      "totalProductChunks": 260,
+      "soldChunks": 260,
+      "averageRevenuePkr": 541666,
+      "profitPerChunk": 416,
+      "founderNetPkr": 203125,
+      "investorCount": 14,
+      "investorReview": 99,
+      "targetAgeGroup": "18+",
+      "materials": "Sea Salt Scrub | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative organic fmcg product from Field & Bloom.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    },
+    {
+      "id": "organic-9",
+      "founderId": "showcase-organic",
+      "title": "Organic Spice Set",
+      "category": "Organic FMCG",
+      "location": "Karachi",
+      "photoId": 2802527,
+      "image": "/marketplace/organic-9.webp",
+      "pricePerChunk": 6425,
+      "totalProductChunks": 280,
+      "soldChunks": 280,
+      "averageRevenuePkr": 599666,
+      "profitPerChunk": 428,
+      "founderNetPkr": 224875,
+      "investorCount": 15,
+      "investorReview": 99,
+      "targetAgeGroup": "18+",
+      "materials": "Organic Spice Set | illustrative product specification",
+      "risk": "Demand, input costs, and operating capacity may vary.",
+      "description": "Illustrative organic fmcg product from Field & Bloom.",
+      "demo": true,
+      "milestones": [
+        {
+          "label": "Production and setup",
+          "weight": 40
+        },
+        {
+          "label": "Distribution",
+          "weight": 35
+        },
+        {
+          "label": "Delivery and reporting",
+          "weight": 25
+        }
+      ]
+    }
+  ]
+}

@@ -17,6 +17,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { analyzeReviewSentiment, analyzeSentimentWithGroq } from "@/lib/sentimentAnalysis";
 
 export const Route = createFileRoute("/app/analytics")({
   component: AnalyticsPage,
@@ -91,16 +92,42 @@ function AnalyticsPage() {
           return Object.keys(productReviews).map((reviewId) => {
             const review = productReviews[reviewId];
             const rating = Number(review.rating) || 0;
+            const text = review.review_text || "";
+            // Prefer persisted Groq NLP sentiment; recompute for legacy reviews without sentiment
+            const storedLabel = String(review.sentiment || "").toUpperCase();
+            const rawPolarity = Number(review.polarity ?? review.polarityScore ?? 0);
+            const rawConfidence = Number(review.confidence ?? 0.8);
+            const nlp =
+              storedLabel === "POSITIVE" || storedLabel === "NEUTRAL" || storedLabel === "NEGATIVE"
+                ? {
+                    label: storedLabel as "POSITIVE" | "NEUTRAL" | "NEGATIVE",
+                    sentiment: storedLabel.toLowerCase() as "positive" | "neutral" | "negative",
+                    polarity: rawPolarity,
+                    confidence: rawConfidence,
+                  }
+                : (() => {
+                    const fallback = analyzeReviewSentiment(text, rating);
+                    return {
+                      label: (fallback.sentiment || fallback.label || "NEUTRAL").toUpperCase() as "POSITIVE" | "NEUTRAL" | "NEGATIVE",
+                      sentiment: (fallback.sentiment || fallback.label || "neutral").toLowerCase() as "positive" | "neutral" | "negative",
+                      polarity: fallback.polarityScore ?? fallback.polarity ?? 0,
+                      confidence: fallback.confidence ?? 0.8,
+                    };
+                  })();
             return {
               id: `${productId}:${reviewId}`,
               name: review.customer_name || "Customer",
               product: product.name || productId,
               productId,
               rating,
-              sentiment: rating >= 4 ? "positive" : rating <= 2 ? "negative" : "neutral",
-              text: review.review_text || "",
+              sentiment: nlp.sentiment,
+              sentimentLabel: nlp.label,
+              polarity: nlp.polarity,
+              confidence: nlp.confidence,
+              text,
               date: review.timestamp ? new Date(review.timestamp).toLocaleDateString() : "",
               createdAt: review.timestamp || 0,
+              orderId: review.order_id || reviewId,
             };
           });
         });
@@ -150,22 +177,32 @@ function AnalyticsPage() {
 
   // ── Reviews state ──
   const [selectedProduct, setSelectedProduct] = useState("All Products");
+  const [selectedProductId, setSelectedProductId] = useState<string>("all");
   const [aiQuestion, setAiQuestion] = useState("");
   const [aiAnswer, setAiAnswer] = useState("");
   const [isAiThinking, setIsAiThinking] = useState(false);
 
   const filteredReviews = useMemo(() => {
-    if (selectedProduct === "All Products") return reviews;
+    if (selectedProductId === "all" && selectedProduct === "All Products") return reviews;
+    if (selectedProductId !== "all") {
+      return reviews.filter((r) => r.productId === selectedProductId);
+    }
     return reviews.filter((r) => r.product === selectedProduct);
-  }, [reviews, selectedProduct]);
+  }, [reviews, selectedProduct, selectedProductId]);
 
   const sentimentCounts = useMemo(() => {
     const counts = { positive: 0, negative: 0, neutral: 0 };
     filteredReviews.forEach((r) => {
-      const sentiment = r.sentiment || (r.rating >= 4 ? "positive" : r.rating <= 2 ? "negative" : "neutral");
+      const sentiment = r.sentiment || "neutral";
       counts[sentiment as keyof typeof counts]++;
     });
     return counts;
+  }, [filteredReviews]);
+
+  const avgPolarity = useMemo(() => {
+    if (!filteredReviews.length) return 0;
+    const sum = filteredReviews.reduce((s, r) => s + (Number(r.polarity) || 0), 0);
+    return Math.round((sum / filteredReviews.length) * 1000) / 1000;
   }, [filteredReviews]);
 
   const total = filteredReviews.length;
@@ -176,17 +213,35 @@ function AnalyticsPage() {
   ];
 
   const productsList = useMemo(() => {
-    return ["All Products", ...new Set(reviews.map((r) => r.product).filter(Boolean))];
+    const map = new Map<string, string>();
+    reviews.forEach((r) => {
+      if (r.productId) map.set(r.productId, r.product || r.productId);
+    });
+    return [
+      { id: "all", name: "All Products" },
+      ...Array.from(map.entries()).map(([id, name]) => ({ id, name })),
+    ];
   }, [reviews]);
 
   const productStats = useMemo(() => {
     return productsList.slice(1).map((prod) => {
-      const revs = reviews.filter((r) => r.product === prod);
-      const pos = revs.filter((r) => r.sentiment === "positive" || r.rating >= 4).length;
-      const neg = revs.filter((r) => r.sentiment === "negative" || r.rating <= 2).length;
-      const neu = revs.filter((r) => r.sentiment === "neutral" || (!r.sentiment && r.rating === 3)).length;
+      const revs = reviews.filter((r) => r.productId === prod.id);
+      const pos = revs.filter((r) => r.sentiment === "positive").length;
+      const neg = revs.filter((r) => r.sentiment === "negative").length;
+      const neu = revs.filter((r) => r.sentiment === "neutral").length;
       const avgRating = revs.reduce((s, r) => s + (Number(r.rating) || 0), 0) / (revs.length || 1);
-      return { name: prod, positive: pos, negative: neg, neutral: neu, total: revs.length, avgRating: isNaN(avgRating) ? 0 : Math.round(avgRating * 10) / 10 };
+      const avgPol =
+        revs.reduce((s, r) => s + (Number(r.polarity) || 0), 0) / (revs.length || 1);
+      return {
+        name: prod.name,
+        productId: prod.id,
+        positive: pos,
+        negative: neg,
+        neutral: neu,
+        total: revs.length,
+        avgRating: isNaN(avgRating) ? 0 : Math.round(avgRating * 10) / 10,
+        avgPolarity: isNaN(avgPol) ? 0 : Math.round(avgPol * 1000) / 1000,
+      };
     });
   }, [reviews, productsList]);
 
@@ -469,15 +524,18 @@ function AnalyticsPage() {
           <div className="flex items-center gap-2 mb-5 flex-wrap">
             {productsList.map((p) => (
               <button
-                key={p}
-                onClick={() => setSelectedProduct(p)}
+                key={p.id}
+                onClick={() => {
+                  setSelectedProductId(p.id);
+                  setSelectedProduct(p.name);
+                }}
                 className={`px-4 py-2 rounded-full text-xs font-bold transition cursor-pointer ${
-                  selectedProduct === p
+                  selectedProductId === p.id
                     ? "bg-[#D97706] text-white shadow-sm"
                     : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
                 }`}
               >
-                {p === "All Products" ? <><Package className="h-3 w-3 inline mr-1.5" />{p}</> : p}
+                {p.id === "all" ? <><Package className="h-3 w-3 inline mr-1.5" />{p.name}</> : p.name}
               </button>
             ))}
           </div>
@@ -511,6 +569,20 @@ function AnalyticsPage() {
                 ))}
               </div>
 
+              <Card className="rounded-2xl border-slate-200 bg-white shadow-none">
+                <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">NLP Avg Polarity</p>
+                    <p className={`text-xl font-black ${avgPolarity >= 0.18 ? "text-emerald-600" : avgPolarity <= -0.18 ? "text-rose-600" : "text-slate-600"}`}>
+                      {avgPolarity >= 0 ? "+" : ""}{avgPolarity.toFixed(3)}
+                    </p>
+                  </div>
+                  <p className="text-[11px] text-slate-500 max-w-sm">
+                    Text NLP on review copy (with star-rating blend). Filter by product above to inspect item-level sentiment.
+                  </p>
+                </CardContent>
+              </Card>
+
               {/* Review Feed */}
               <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
                 <CardHeader className="p-5 border-b border-slate-100 pb-4">
@@ -540,12 +612,15 @@ function AnalyticsPage() {
                               rev.sentiment === "negative" ? "bg-rose-100 text-rose-700" :
                               "bg-slate-200 text-slate-600"
                             }`}>
-                              {rev.sentiment || (rev.rating >= 4 ? "positive" : rev.rating <= 2 ? "negative" : "neutral")}
+                              {rev.sentimentLabel || String(rev.sentiment || "neutral").toUpperCase()}
                             </Badge>
                             <span className="text-[10px] text-[#D97706] font-bold">{"★".repeat(rev.rating)}{"☆".repeat(5 - rev.rating)}</span>
                           </div>
                         </div>
-                        <p className="text-[11px] text-slate-400 font-semibold">{rev.product}</p>
+                        <p className="text-[11px] text-slate-400 font-semibold">
+                          {rev.product}
+                          <span className="ml-2 text-slate-300">· polarity {(Number(rev.polarity) || 0).toFixed(2)} · conf {Math.round((Number(rev.confidence) || 0) * 100)}%</span>
+                        </p>
                         <p className="text-xs text-slate-700 leading-relaxed italic">"{rev.text}"</p>
                       </div>
                     ))

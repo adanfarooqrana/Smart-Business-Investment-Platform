@@ -443,7 +443,7 @@ export const DEFAULT_TESTIMONIALS: TestimonialQuote[] = [
     id: "t-seed-1",
     name: "Ayesha Khan",
     role: "Business Owner",
-    quote: "SmartBiz ne meri dukaan ko 3 mahine mein online le aaya. Sales double ho gayi!",
+    quote: "InvestBiz ne meri dukaan ko 3 mahine mein online le aaya. Sales double ho gayi!",
     imageUrl: "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=400&q=80&auto=format&fit=crop",
     color: "#b45309",
     createdAt: Date.now() - 600000,
@@ -1382,7 +1382,7 @@ export function useAppState() {
       avatarColor: "bg-emerald-600",
       time: "Just now",
       title: `📈 Official reputation & growth scorecard shared by ${biz.name || "Ecosystem Partner"}!`,
-      content: `We are verified members of the SmartBiz AI Ecosystem! Here is our current sandbox progress snapshot. We are open to wholesaling and investor inquiries.`,
+      content: `We are verified members of the InvestBiz! Here is our current sandbox progress snapshot. We are open to wholesaling and investor inquiries.`,
       votes: 5,
       comments: [],
       isStatsPost: true,
@@ -1895,7 +1895,7 @@ export function useAppState() {
   const submitProblem = (title: string, content: string, urgency: "High" | "Medium" | "Low", tag: string) => {
     const resolutions: Record<string, string> = {
       Logistics: "AI Recommendation: Partner with Gujranwala cargo dispatch loops to establish a 24-hour backup route. This typically reduces regional lead times by 32%.",
-      Financing: "AI Recommendation: Prepare a Verified Scorecard PDF and link it to your Pitch Desk. Vetted investors on SmartBiz are currently offering a 12% lower cost of capital for businesses scoring above 85.",
+      Financing: "AI Recommendation: Prepare a Verified Scorecard PDF and link it to your Pitch Desk. Vetted investors on InvestBiz are currently offering a 12% lower cost of capital for businesses scoring above 85.",
       Marketing: "AI Recommendation: Trigger a Click-and-Collect promotion combined with an automated review SMS loop to increase review velocity by 2.4x.",
       Default: "AI Recommendation: Scan matching specialized niche owners in the Gujranwala mapping registry. Establishing co-op supply hubs will pool buying power and mitigate logistics bottlenecks."
     };
@@ -2228,8 +2228,8 @@ export function buildInvestorMessageFormat(opts: {
 }): string {
   const header =
     opts.type === "agreement_objection"
-      ? "📋 SMARTBIZ AGREEMENT OBJECTION"
-      : "✉️ SMARTBIZ INVESTOR MESSAGE";
+      ? "📋 INVESTBIZ AGREEMENT OBJECTION"
+      : "✉️ INVESTBIZ INVESTOR MESSAGE";
   return [
     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
     header,

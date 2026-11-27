@@ -9,7 +9,7 @@ import {
 import { CountUp } from "@/components/landing/landingUtils";
 
 const ROLE_LABEL: Record<string, string> = {
-  entrepreneur: "Founder",
+  entrepreneur: "Entrepreneur",
   business_owner: "Business",
   business: "Business",
   investor: "Investor",
@@ -95,7 +95,7 @@ export function LandingCommunityLiveStats() {
 
   const roleBars = useMemo(
     () => [
-      { label: "Founders", value: stats.entrepreneurs },
+      { label: "Entrepreneurs", value: stats.entrepreneurs },
       { label: "Business", value: stats.businessOwners },
       { label: "Investors", value: stats.investors },
       { label: "Wholesalers", value: stats.wholesalers },

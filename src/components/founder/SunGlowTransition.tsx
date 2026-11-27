@@ -6,7 +6,7 @@ type Props = {
   label?: string;
 };
 
-const SUN_LOGO = "/pngend.png";
+const SUN_LOGO = "/images/investbiz-logo.webp";
 
 export function SunGlowTransition({ active, onComplete, label = "Loading..." }: Props) {
   const [phase, setPhase] = useState<"idle" | "glow" | "burst" | "done">("idle");
@@ -64,7 +64,7 @@ export function SunGlowTransition({ active, onComplete, label = "Loading..." }: 
         >
           <img
             src={SUN_LOGO}
-            alt="SmartBiz Sun"
+            alt="InvestBiz"
             className="h-full w-full animate-pulse object-contain drop-shadow-[0_0_30px_rgba(255,215,0,0.9)]"
             onError={(e) => {
               const el = e.currentTarget;

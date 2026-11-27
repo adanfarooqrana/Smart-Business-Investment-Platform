@@ -29,14 +29,17 @@ export default function OrdersAnalytics() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState({
     total_revenue: 0,
-    net_profit: 0,
+    gross_profit: 0,
     operational_cost: 0,
-    total_orders_pending: 0
+    total_orders_pending: 0,
   });
 
   const [timeFilter, setTimeFilter] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [editingOpCost, setEditingOpCost] = useState(false);
+  const [opCostDraft, setOpCostDraft] = useState("");
+  const [savingOpCost, setSavingOpCost] = useState(false);
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
@@ -47,11 +50,12 @@ export default function OrdersAnalytics() {
         onValue(statsRef, (snapshot) => {
           if (snapshot.exists()) {
             const data = snapshot.val();
+            const gross = Number(data.gross_profit ?? data.net_profit ?? 0);
             setStats({
               total_revenue: data.total_revenue || 0,
-              net_profit: data.net_profit || 0,
+              gross_profit: gross,
               operational_cost: data.operational_cost || 0,
-              total_orders_pending: data.total_orders_pending || 0
+              total_orders_pending: data.total_orders_pending || 0,
             });
           }
         });
@@ -75,11 +79,33 @@ export default function OrdersAnalytics() {
     return () => unsubscribeAuth();
   }, []);
 
+  const netProfit = stats.gross_profit - stats.operational_cost;
+
+  const openOpCostEditor = () => {
+    setOpCostDraft(String(stats.operational_cost || 0));
+    setEditingOpCost(true);
+  };
+
+  const saveOpCost = async () => {
+    if (!currentUser) return;
+    setSavingOpCost(true);
+    try {
+      await BusinessOwnerService.updateOperationalCost(
+        currentUser.uid,
+        Number(opCostDraft) || 0,
+      );
+      setEditingOpCost(false);
+    } catch (err: any) {
+      alert(err.message || "Failed to save operational cost.");
+    } finally {
+      setSavingOpCost(false);
+    }
+  };
   const handleAcceptOrder = async (orderId: string) => {
     if (!currentUser) return;
     try {
       await BusinessOwnerService.updateOrderStatus(currentUser.uid, orderId, "accept");
-      alert("Order accepted successfully! Email notification triggered.");
+      alert("Order accepted! Customer confirmation email sent via EmailJS.");
     } catch (err: any) {
       alert(err.message);
     }
@@ -89,7 +115,7 @@ export default function OrdersAnalytics() {
     if (!currentUser) return;
     try {
       await BusinessOwnerService.updateOrderStatus(currentUser.uid, orderId, "decline");
-      alert("Order declined successfully.");
+      alert("Order declined/cancelled. Customer update email sent via EmailJS.");
     } catch (err: any) {
       alert(err.message);
     }
@@ -99,7 +125,7 @@ export default function OrdersAnalytics() {
     if (!currentUser) return;
     try {
       await BusinessOwnerService.markOrderAsDelivered(currentUser.uid, orderId);
-      alert("Order marked as Delivered! Revenue and Net Profit updated.");
+      alert("Order marked as Delivered! EmailJS delivery email & review link sent to customer.");
     } catch (err: any) {
       alert(err.message);
     }
@@ -146,7 +172,7 @@ export default function OrdersAnalytics() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition">
           <div>
             <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Gross Revenue</p>
@@ -157,20 +183,70 @@ export default function OrdersAnalytics() {
 
         <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition">
           <div>
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Net Profit</p>
-            <h3 className={`text-2xl font-bold mt-1 ${stats.net_profit >= 0 ? "text-gray-900" : "text-red-500"}`}>
-              Rs. {stats.net_profit.toLocaleString()}
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Gross Profit</p>
+            <h3 className={`text-2xl font-bold mt-1 ${stats.gross_profit >= 0 ? "text-gray-900" : "text-red-500"}`}>
+              Rs. {stats.gross_profit.toLocaleString()}
             </h3>
           </div>
           <div className="bg-blue-50 p-3 rounded-lg text-blue-500 font-bold">%</div>
         </div>
 
+        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Operational Cost</p>
+              {editingOpCost ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <input
+                    type="number"
+                    className="w-28 rounded-lg border border-gray-200 px-2 py-1.5 text-sm font-bold"
+                    value={opCostDraft}
+                    onChange={(e) => setOpCostDraft(e.target.value)}
+                    min={0}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void saveOpCost()}
+                    disabled={savingOpCost}
+                    className="rounded-lg bg-slate-900 px-2.5 py-1.5 text-[10px] font-bold text-white disabled:opacity-50"
+                  >
+                    {savingOpCost ? "Saving…" : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingOpCost(false)}
+                    className="text-[10px] font-semibold text-gray-500"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                    Rs. {stats.operational_cost.toLocaleString()}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={openOpCostEditor}
+                    className="mt-2 text-[11px] font-bold text-amber-600 hover:underline"
+                  >
+                    Edit
+                  </button>
+                </>
+              )}
+            </div>
+            <div className="bg-red-50 p-3 rounded-lg text-red-500 font-bold shrink-0">⚡</div>
+          </div>
+        </div>
+
         <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition">
           <div>
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Operational Cost</p>
-            <h3 className="text-2xl font-bold text-gray-900 mt-1">Rs. {stats.operational_cost.toLocaleString()}</h3>
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Net Profit</p>
+            <h3 className={`text-2xl font-bold mt-1 ${netProfit >= 0 ? "text-emerald-700" : "text-red-500"}`}>
+              Rs. {netProfit.toLocaleString()}
+            </h3>
           </div>
-          <div className="bg-red-50 p-3 rounded-lg text-red-500 font-bold">⚡</div>
+          <div className="bg-emerald-50 p-3 rounded-lg text-emerald-600 font-bold">Σ</div>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition">
@@ -181,7 +257,6 @@ export default function OrdersAnalytics() {
           <div className="bg-orange-50 p-3 rounded-lg text-orange-500 font-bold">📦</div>
         </div>
       </div>
-
       <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm mb-8">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-lg font-bold text-gray-900">Financial Performance Chart</h2>
@@ -289,7 +364,7 @@ export default function OrdersAnalytics() {
                             onClick={() => handleMarkAsDelivered(order.id)}
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-lg transition border border-blue-200"
                           >
-                            <DeliveryIcon /> Mark Delivered
+                            <DeliveryIcon /> Mark as Delivered
                           </button>
                         )}
                         {order.status === "delivered" && (

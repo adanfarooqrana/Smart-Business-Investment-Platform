@@ -1,3 +1,6 @@
+import LandingPricingFeedback from "../../../frontend/src/components/LandingPricingFeedback.jsx";
+import WholesaleMapShowcase from "../../../frontend/src/components/WholesaleMapShowcase.jsx";
+import GrowthOrbitShowcase from "../../../frontend/src/components/GrowthOrbitShowcase.jsx";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
@@ -105,7 +108,6 @@ export function LandingPage() {
     return () => clearInterval(timer);
   }, []);
 
-  const ActiveStepIcon = GROWTH_STEPS[activeStep].icon;
 
   return (
     <div className="min-h-screen bg-[#f5f5f5]">
@@ -160,109 +162,33 @@ export function LandingPage() {
         </LandingSection>
 
         <LandingSection id="how">
-          <div className="mx-auto mb-4 max-w-3xl space-y-2 text-center">
-            <h2 className="font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-slate-900 md:text-5xl">
-              Rank, Match, and Scale Your Business in One Continuous Orbit
-            </h2>
-            <p className="mx-auto max-w-2xl text-sm leading-relaxed text-slate-600">
-              Every system feeds the next automatically. Complete our interactive steps to compile reputation scores,
-              trigger industry advisory, and connect directly to capital.
-            </p>
-          </div>
-
-          <div className="grid items-stretch gap-6 lg:grid-cols-[1fr_1.1fr] lg:gap-8">
-            <div className="flex h-full flex-col gap-4">
-              <div className="flex flex-1 flex-col justify-center space-y-4 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm md:p-6">
-                <h3 className="font-display flex items-center gap-2.5 text-2xl font-extrabold text-slate-900">
-                  <ActiveStepIcon className="h-6 w-6 shrink-0 text-amber-500" />
-                  {GROWTH_STEPS[activeStep].title}
-                </h3>
-                <p className="text-sm font-medium leading-relaxed text-slate-600">
-                  {GROWTH_STEPS[activeStep].body}
-                </p>
-                <Link
-                  to="/app/register"
-                  className="inline-flex w-fit items-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-slate-800"
-                >
-                  Start now <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {GROWTH_STEPS.map((step, i) => (
-                  <button
-                    key={step.title}
-                    type="button"
-                    onClick={() => setActiveStep(i)}
-                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
-                      i === activeStep
-                        ? "bg-amber-500 text-white shadow-sm"
-                        : "border border-slate-200 bg-slate-50 text-slate-600 hover:border-amber-300"
-                    }`}
-                  >
-                    {i + 1}. {step.title.split(" ")[0]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-center">
-              <LandingGrowthOrbit
-                steps={GROWTH_STEPS}
-                activeIndex={activeStep}
-                onSelectStep={setActiveStep}
-              />
-            </div>
-          </div>
+          <GrowthOrbitShowcase
+            steps={GROWTH_STEPS}
+            activeIndex={activeStep}
+            onSelectStep={setActiveStep}
+            orbit={<LandingGrowthOrbit steps={GROWTH_STEPS} activeIndex={activeStep} onSelectStep={setActiveStep} />}
+            startLink={<Link to="/app/register" className="pgo-cta">Start now <ArrowRight className="h-4 w-4" /></Link>}
+          />
         </LandingSection>
 
         <LandingGuestAIConsultant />
 
         <LandingSection id="wholesale" cardClassName="!py-12 md:!py-16">
-          <div className="grid items-center gap-6 lg:grid-cols-2 lg:gap-8">
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm md:p-6">
-              <h3 className="mb-4 text-2xl font-bold text-slate-900">Verified Wholesaler Network</h3>
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  { label: "Wholesalers", val: platformStats.wholesalers },
-                  { label: "Bulk orders", val: platformStats.sampleOrders },
-                  { label: "Packaging ideas", val: platformStats.packagingPosts },
-                  { label: "Community posts", val: platformStats.communityPosts },
-                ].map((item) => (
-                  <div key={item.label} className="text-center sm:text-left">
-                    <p className="text-lg font-extrabold text-slate-900">{item.val}</p>
-                    <p className="text-[10px] font-semibold uppercase text-slate-500">{item.label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-2 py-2">
-              <h2 className="font-display text-3xl font-extrabold text-slate-900 md:text-4xl">
-                Source products and win bulk orders at scale
-              </h2>
-              <p className="text-sm leading-relaxed text-slate-600">
-                List your catalog, receive packaging requests, and fulfil orders from verified businesses across
-                Pakistan.
-              </p>
-              <Link
-                to="/app/register"
-                className="inline-flex w-fit items-center gap-2 rounded-full bg-slate-900 px-6 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800"
-              >
-                Find Wholesaler now <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
-          </div>
+          <WholesaleMapShowcase
+            startLink={<Link to="/app/register" className="wms-cta">Find Wholesaler now <ArrowRight className="h-4 w-4" /></Link>}
+          />
         </LandingSection>
 
         <LandingCommunityPreview />
 
+        <LandingPricingFeedback />
         <LandingFAQ items={FAQ_ITEMS} />
 
         <LandingSection cardClassName="!bg-amber-50">
           <div className="mx-auto max-w-2xl space-y-2 text-center">
             <Globe className="mx-auto h-10 w-10 text-amber-500" />
             <h2 className="font-display text-3xl font-extrabold text-slate-900">
-              Ready to grow with Smart Business AI?
+              Ready to grow with InvestBiz?
             </h2>
             <p className="text-sm text-slate-600">
               Join {platformStats.totalMembers.toLocaleString()}+ members building, investing, and scaling together.

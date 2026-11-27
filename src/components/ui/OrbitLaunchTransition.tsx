@@ -1,16 +1,16 @@
-import type { LucideIcon } from "lucide-react";
-import { Sparkles } from "lucide-react";
+import type { ElementType } from "react";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export type OrbitLaunchTransitionProps = {
   accent?: string;
   label?: string;
-  icon?: LucideIcon;
+  icon?: ElementType;
 };
 
 export function OrbitLaunchTransition({
   accent = "#f59e0b",
   label = "Opening...",
-  icon: Icon = Sparkles,
+  icon: Icon = BrandLogo,
 }: OrbitLaunchTransitionProps) {
   return (
     <div

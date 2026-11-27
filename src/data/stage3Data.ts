@@ -45,7 +45,7 @@ export function buildStage3For(idea: IdeaBase): StartupIdeaStage3 {
 
   return {
     legalAgreementText: `
-SMARTBIZ GROW — INVESTMENT & ESCROW AGREEMENT
+INVESTBIZ GROW — INVESTMENT & ESCROW AGREEMENT
 ═══════════════════════════════════════════════
 
 PARTIES
@@ -54,7 +54,7 @@ PARTIES
   Investor:   [Investor Legal Name — to be filled on signing]
 
 1. PURPOSE
-   This Agreement governs the equity investment in ${idea.startupTitle}, a ${idea.stage1.industryField} venture, pursuant to SmartBiz Grow Stage 3 escrow settlement.
+   This Agreement governs the equity investment in ${idea.startupTitle}, a ${idea.stage1.industryField} venture, pursuant to InvestBiz Grow Stage 3 escrow settlement.
 
 2. INVESTMENT TERMS (from Entrepreneur disclosure)
    • Expected ROI: ${idea.stage1.expectedRoi}
@@ -64,13 +64,13 @@ PARTIES
    • Total Capital Raise Target: PKR ${raise.toLocaleString()}
 
 3. ESCROW & MILESTONE RELEASE
-   Funds deposited via JazzCash, EasyPaisa, or Card are held in SmartBiz Escrow. Release occurs upon verified milestone completion as tracked in the investor dashboard.
+   Funds deposited via JazzCash, EasyPaisa, or Card are held in InvestBiz Escrow. Release occurs upon verified milestone completion as tracked in the investor dashboard.
 
 4. REPRESENTATIONS
    The Founder represents that all Stage 1 & Stage 2 disclosures, proof gallery uploads, and financial projections were prepared in good faith.
 
 5. GOVERNING LAW
-   This Agreement is governed by the laws of the Islamic Republic of Pakistan. Disputes resolved via SmartBiz arbitration panel.
+   This Agreement is governed by the laws of the Islamic Republic of Pakistan. Disputes resolved via InvestBiz arbitration panel.
 
 6. SIGNATURES
    By clicking "Accept & Sign Agreement", both parties agree to be bound by these terms electronically under the Electronic Transactions Ordinance, 2002.

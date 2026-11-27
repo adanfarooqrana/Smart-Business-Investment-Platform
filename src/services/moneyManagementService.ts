@@ -143,7 +143,7 @@ export function generateReceiptScreenshotDataUrl(opts: {
   <rect width="360" height="520" fill="#f8fafc"/>
   <rect x="20" y="20" width="320" height="80" rx="12" fill="${color}"/>
   <text x="180" y="55" text-anchor="middle" fill="white" font-family="Arial,sans-serif" font-size="18" font-weight="bold">${wallet} Payment Receipt</text>
-  <text x="180" y="78" text-anchor="middle" fill="#fecaca" font-family="Arial,sans-serif" font-size="11">SmartBiz Escrow · Verified</text>
+  <text x="180" y="78" text-anchor="middle" fill="#fecaca" font-family="Arial,sans-serif" font-size="11">InvestBiz Escrow · Verified</text>
   <text x="40" y="130" fill="#64748b" font-family="Arial,sans-serif" font-size="11">TRANSACTION ID</text>
   <text x="40" y="150" fill="#0f172a" font-family="monospace" font-size="13">TXN-${Date.now().toString(36).toUpperCase()}</text>
   <text x="40" y="185" fill="#64748b" font-family="Arial,sans-serif" font-size="11">FROM (INVESTOR)</text>

@@ -28,8 +28,8 @@ const BADGE_MAP: Record<string, { label: string; className: string }> = {
   },
   consultant: { label: "Consultant Post", className: "bg-amber-500/10 text-amber-700 border-amber-500/10" },
   investor: { label: "Investor Post", className: "bg-teal-500/10 text-teal-700 border-teal-500/10" },
-  founder: { label: "Founder Post", className: "bg-amber-500/10 text-amber-700 border-amber-500/10" },
-  entrepreneur: { label: "Founder Post", className: "bg-amber-500/10 text-amber-700 border-amber-500/10" },
+  founder: { label: "Entrepreneur Post", className: "bg-amber-500/10 text-amber-700 border-amber-500/10" },
+  entrepreneur: { label: "Entrepreneur Post", className: "bg-amber-500/10 text-amber-700 border-amber-500/10" },
   guest: { label: "Community Post", className: "bg-slate-100 text-slate-700 border-slate-100" },
 };
 

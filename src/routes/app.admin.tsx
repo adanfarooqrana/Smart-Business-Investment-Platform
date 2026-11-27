@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { usePlatformStats } from "@/hooks/usePlatformStats";
 import {
@@ -32,20 +32,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { authenticateAdmin, clearAdminSession, isAdminSessionValid } from "@/services/adminKycService";
 
 export const Route = createFileRoute("/app/admin")({
   component: AdminPanel,
 });
 
-const ADMIN_PASSWORD = "admin123";
+
 
 type AdminTab = "monitor" | "quotes" | "agent";
 
 function AdminPanel() {
-  const [authed, setAuthed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return sessionStorage.getItem("smartbiz_admin_authed") === "1";
-  });
+  const [authed, setAuthed] = useState(false);
+  useEffect(() => {
+    void isAdminSessionValid().then(setAuthed);
+  }, []);
 
   if (!authed) {
     return <AdminLogin onSuccess={() => setAuthed(true)} />;
@@ -54,17 +55,20 @@ function AdminPanel() {
 }
 
 function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
+  const [email, setEmail] = useState("");
   const [pwd, setPwd] = useState("");
   const [err, setErr] = useState("");
 
-  const handle = (e: React.FormEvent) => {
+  const handle = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pwd === ADMIN_PASSWORD) {
-      sessionStorage.setItem("smartbiz_admin_authed", "1");
-      onSuccess();
-    } else {
-      setErr("Ghalat password. Dobara koshish karein.");
-    }
+    setErr("");
+    try {
+      if (await authenticateAdmin(email, pwd)) {
+        onSuccess();
+        return;
+      }
+    } catch { /* Use the same error for inaccessible admin accounts. */ }
+    setErr("An authorized Firebase administrator account is required.");
   };
 
   return (
@@ -83,10 +87,13 @@ function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
             <ShieldCheck className="h-8 w-8" />
           </div>
           <h1 className="font-display text-2xl font-extrabold text-white">Admin Control Panel</h1>
-          <p className="mt-1 text-sm text-slate-400">Authorized access only · SmartBiz AI</p>
+          <p className="mt-1 text-sm text-slate-400">Authorized access only · InvestBiz AI</p>
         </div>
 
         <div className="space-y-2">
+          <Label htmlFor="admin-email" className="text-slate-300">Admin Email</Label>
+          <Input id="admin-email" type="email" autoComplete="username" required value={email}
+            onChange={(e) => setEmail(e.target.value)} className="border-amber-400/30 bg-slate-800/70 text-white" />
           <Label htmlFor="admin-pwd" className="flex items-center gap-1.5 text-slate-300">
             <Lock className="h-3.5 w-3.5" /> Admin Password
           </Label>
@@ -102,7 +109,6 @@ function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
             className="border-amber-400/30 bg-slate-800/70 text-white placeholder:text-slate-500"
           />
           {err && <p className="text-xs font-medium text-red-400">{err}</p>}
-          <p className="text-[11px] text-slate-500">Demo password: <span className="font-mono text-amber-300">admin123</span></p>
         </div>
 
         <Button type="submit" className="mt-6 w-full bg-gradient-to-r from-amber-500 to-orange-600 font-bold text-white hover:from-amber-400 hover:to-orange-500">
@@ -121,7 +127,7 @@ function AdminConsole({ onLogout }: { onLogout: () => void }) {
   const [tab, setTab] = useState<AdminTab>("monitor");
 
   const handleLogout = () => {
-    sessionStorage.removeItem("smartbiz_admin_authed");
+    void clearAdminSession();
     onLogout();
   };
 
@@ -380,7 +386,7 @@ function QuotesTab() {
               id="q-quote"
               value={quote}
               onChange={(e) => setQuote(e.target.value)}
-              placeholder="SmartBiz ne meri sales double kar di..."
+              placeholder="InvestBiz ne meri sales double kar di..."
               rows={3}
             />
           </div>

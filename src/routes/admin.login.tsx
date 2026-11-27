@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import {
   authenticateAdmin,
   isAdminSessionValid,
-  ADMIN_EMAIL,
 } from "@/services/adminKycService";
 
 export const Route = createFileRoute("/admin/login")({
@@ -16,23 +15,23 @@ export const Route = createFileRoute("/admin/login")({
 
 function AdminLoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState(ADMIN_EMAIL);
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (isAdminSessionValid()) {
-      navigate({ to: "/admin/dashboard" });
-    }
+    void isAdminSessionValid().then((valid) => { if (valid) navigate({ to: "/admin/dashboard" }); });
   }, [navigate]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (authenticateAdmin(email, password)) {
-      navigate({ to: "/admin/dashboard" });
-      return;
-    }
+    try {
+      if (await authenticateAdmin(email, password)) {
+        navigate({ to: "/admin/dashboard" });
+        return;
+      }
+    } catch { /* Use the same error for inaccessible admin accounts. */ }
     setError("Invalid admin credentials.");
   };
 

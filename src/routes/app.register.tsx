@@ -22,6 +22,10 @@ import { BusinessOwnerSignup } from "@/components/business/BusinessOwnerSignup";
 
 export const Route = createFileRoute("/app/register")({
   component: OnboardingPortal,
+  validateSearch: (search: Record<string, unknown>) => ({
+    resume: search.resume === "business_owner" || search.resume === "entrepreneur" ||
+      search.resume === "investor" || search.resume === "wholesaler" ? search.resume : undefined,
+  }),
 });
 
 type OnboardingState = {
@@ -77,7 +81,10 @@ const PAKISTAN_CITIES = [
 
 function OnboardingPortal() {
   const { business, registerBusiness, approveBusiness, registerConsultant, setIsLoggedIn } = useAppState();
-  const [flow, setFlow] = useState<"choose" | "business" | "investor" | "consultant" | "entrepreneur">("choose");
+  const { resume } = Route.useSearch();
+  const [flow, setFlow] = useState<"choose" | "business" | "investor" | "consultant" | "entrepreneur">(
+    resume === "business_owner" ? "business" : resume === "wholesaler" ? "consultant" : resume || "choose",
+  );
   const [step, setStep] = useState(1); // 1: Personal, 2: Business, 3: Biometric, 4: Compliance Wait
   const [businessStarted, setBusinessStarted] = useState(false); // intro "Let's Begin" gate
   const showLegacyConsultant = false; // replaced by <WholesalerOnboarding />
@@ -373,22 +380,22 @@ function OnboardingPortal() {
 
   // RENDER INVESTOR ONBOARDING FLOW
   if (flow === "investor") {
-    return <InvestorOnboarding onBack={() => setFlow("choose")} />;
+    return <InvestorOnboarding resume={resume === "investor"} onBack={() => setFlow("choose")} />;
   }
 
   // RENDER BUSINESS OWNER ONBOARDING FLOW
   if (flow === "business") {
-    return <BusinessOwnerSignup onBack={() => setFlow("choose")} />;
+    return <BusinessOwnerSignup resume={resume === "business_owner"} onBack={() => setFlow("choose")} />;
   }
 
   // RENDER WHOLESALER ONBOARDING FLOW
   if (flow === "consultant") {
-    return <WholesalerOnboarding onBack={() => setFlow("choose")} />;
+    return <WholesalerOnboarding resume={resume === "wholesaler"} onBack={() => setFlow("choose")} />;
   }
 
   // RENDER ENTREPRENEUR ONBOARDING FLOW
   if (flow === "entrepreneur") {
-    return <EntrepreneurOnboarding onBack={() => setFlow("choose")} />;
+    return <EntrepreneurOnboarding resume={resume === "entrepreneur"} onBack={() => setFlow("choose")} />;
   }
 
   // Legacy wholesaler flow (kept for reference, replaced by <WholesalerOnboarding />)
@@ -596,7 +603,7 @@ function OnboardingPortal() {
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-400">
             <div className="space-y-2">
               <h3 className="text-xl font-bold tracking-tight">Identity & Business Compliance Proofs</h3>
-              <p className="text-sm text-muted-foreground">SmartBiz platform enforces strict compliance verification for wholesalers to prevent fraud and ensure verified catalog listings.</p>
+              <p className="text-sm text-muted-foreground">InvestBiz platform enforces strict compliance verification for wholesalers to prevent fraud and ensure verified catalog listings.</p>
             </div>
 
             <div className="grid gap-6 sm:grid-cols-2">

@@ -202,6 +202,9 @@ export type ChatMessageNode = {
   timestamp: number;
   stageContext?: string;
   senderName?: string;
+  attachmentUrl?: string;
+  attachmentType?: "image" | "document";
+  attachmentName?: string;
 };
 
 export type InvestorChatThread = {
@@ -240,13 +243,21 @@ export async function commitInvestorProfile(
   try {
     // Profile always lands under the live Auth UID (never a generated sibling root)
     const uid = requireActiveInvestorUid(investorId);
-    assertInvestorPassword(payload.password);
+
+    let password = String(payload.password || "");
+    if (password) {
+      assertInvestorPassword(password);
+    } else {
+      // Resume / Stage 3 after email verify — password already in Firebase Auth
+      const existing = await fetchInvestorProfile(uid);
+      password = String(existing?.password || "");
+    }
 
     // L1 only — never write sensitive fields to investors/{uid} root; never wipe siblings
     const node: InvestorProfileNode = {
       fullName: String(payload.fullName || "").trim(),
       email: String(payload.email || "").trim().toLowerCase(),
-      password: String(payload.password || ""),
+      password,
       cnic: String(payload.cnic || "").trim(),
       mobilePhoneForOtp: String(payload.mobilePhoneForOtp || "").trim(),
       role: "investor",
@@ -262,7 +273,10 @@ export async function commitInvestorProfile(
     };
 
     if (!node.fullName || !node.email || !node.cnic || !node.mobilePhoneForOtp) {
-      throw new Error("fullName, email, cnic, and mobilePhoneForOtp are required.");
+      throw new Error("Full name, email, CNIC number, and phone are required.");
+    }
+    if (!node.bankDetails.bankName || !node.bankDetails.accountNumber) {
+      throw new Error("Bank name and account number are required.");
     }
 
     await update(ref(database), {
@@ -920,6 +934,9 @@ export async function sendUnifiedChatMessage(
     founderName?: string;
     startupTitle?: string;
     investorName?: string;
+    attachmentUrl?: string;
+    attachmentType?: "image" | "document";
+    attachmentName?: string;
   } = {},
 ): Promise<string> {
   try {
@@ -928,10 +945,23 @@ export async function sendUnifiedChatMessage(
     const cleanFounder = String(founderId || "").trim();
     const cleanSender = String(senderId || auth.currentUser?.uid || "").trim();
     const cleanText = String(text || "").trim();
+    const attachmentUrl = String(options.attachmentUrl || "").trim();
+    const attachmentType =
+      options.attachmentType === "document" || options.attachmentType === "image"
+        ? options.attachmentType
+        : undefined;
+    const attachmentName = String(options.attachmentName || "").trim();
     const senderName = String(options.senderName || "").trim() || "User";
 
-    if (!cleanPitch || !cleanInv || !cleanFounder || !cleanSender || !cleanText) {
-      throw new Error("Chat identifiers and text are required.");
+    if (!cleanPitch || !cleanInv || !cleanFounder || !cleanSender) {
+      throw new Error("Chat identifiers are required.");
+    }
+    if (!cleanText && !attachmentUrl) {
+      throw new Error("Message text or an attachment is required.");
+    }
+    // Never persist a photo/doc placeholder without a real file URL
+    if (!attachmentUrl && (options.attachmentType || options.attachmentName)) {
+      throw new Error("Attachment upload failed — missing file URL. Please try again.");
     }
 
     const chatId = getChatRoomId(cleanPitch, cleanInv, cleanFounder);
@@ -939,21 +969,47 @@ export async function sendUnifiedChatMessage(
     if (!messageId) throw new Error("Failed to allocate message id.");
     const timestamp = Date.now();
 
-    const messagePayload = {
+    const displayText =
+      cleanText ||
+      (attachmentType === "image"
+        ? "📷 Photo"
+        : attachmentName
+          ? `📄 ${attachmentName}`
+          : "📄 Document");
+
+    const messagePayload: Record<string, string | number> = {
       senderId: cleanSender,
       senderName,
-      text: cleanText,
+      text: displayText,
       timestamp,
       messageId,
       stageContext: String(stageContext || "General").trim() || "General",
     };
+    if (attachmentUrl) {
+      messagePayload.attachmentUrl = attachmentUrl;
+      messagePayload.attachmentType = attachmentType || "document";
+      messagePayload.attachmentName =
+        attachmentName || (attachmentType === "image" ? "photo.jpg" : "document");
+    }
 
-    const lastMessagePreview = {
+    const lastMessagePreview: Record<string, string | number> = {
       senderId: cleanSender,
       senderName,
-      text: cleanText.slice(0, 200),
+      text: displayText.slice(0, 200),
       timestamp,
     };
+    if (attachmentUrl) {
+      lastMessagePreview.attachmentUrl = attachmentUrl;
+      lastMessagePreview.attachmentType = attachmentType || "document";
+      lastMessagePreview.attachmentName =
+        attachmentName || (attachmentType === "image" ? "photo.jpg" : "document");
+    }
+
+    // Write the message node first so attachment fields are never dropped by a meta update failure
+    await set(
+      ref(database, `${INVESTOR_CHAT_MESSAGES(cleanInv, chatId)}/${messageId}`),
+      messagePayload,
+    );
 
     const roomMeta: ChatRoomMeta = {
       pitchId: cleanPitch,
@@ -962,7 +1018,7 @@ export async function sendUnifiedChatMessage(
       founderName: String(options.founderName || "").trim() || undefined,
       investorName: String(options.investorName || "").trim() || undefined,
       startupTitle: String(options.startupTitle || "").trim() || undefined,
-      lastMessage: lastMessagePreview as ChatMessageNode,
+      lastMessage: lastMessagePreview as unknown as ChatMessageNode,
       lastTimestamp: timestamp,
       updatedAt: timestamp,
     };
@@ -979,7 +1035,6 @@ export async function sendUnifiedChatMessage(
       [`${INVESTOR_CHAT_ROOM(cleanInv, chatId)}/lastMessage`]: lastMessagePreview,
       [`${INVESTOR_CHAT_ROOM(cleanInv, chatId)}/lastTimestamp`]: timestamp,
       [`${INVESTOR_CHAT_ROOM(cleanInv, chatId)}/updatedAt`]: timestamp,
-      [`${INVESTOR_CHAT_MESSAGES(cleanInv, chatId)}/${messageId}`]: messagePayload,
       [FOUNDER_CHAT_INDEX(cleanFounder, chatId)]: {
         ...metaClean,
         lastMessage: lastMessagePreview,
@@ -997,7 +1052,12 @@ export async function sendUnifiedChatMessage(
       updates[`${INVESTOR_CHAT_ROOM(cleanInv, chatId)}/startupTitle`] = metaClean.startupTitle;
     }
 
-    await update(ref(database), updates);
+    try {
+      await update(ref(database), updates);
+    } catch (metaErr) {
+      // Message already saved — don't fail the send if only thread meta update fails
+      console.warn("Chat meta update warning:", metaErr);
+    }
     return messageId;
   } catch (error) {
     console.error("sendUnifiedChatMessage error:", error);
@@ -1035,6 +1095,16 @@ export function streamChatMessages(
             timestamp: Number(raw[k]?.timestamp) || 0,
             stageContext: String(raw[k]?.stageContext || "General"),
             senderName: raw[k]?.senderName ? String(raw[k].senderName) : undefined,
+            attachmentUrl: raw[k]?.attachmentUrl
+              ? String(raw[k].attachmentUrl)
+              : undefined,
+            attachmentType:
+              raw[k]?.attachmentType === "image" || raw[k]?.attachmentType === "document"
+                ? raw[k].attachmentType
+                : undefined,
+            attachmentName: raw[k]?.attachmentName
+              ? String(raw[k].attachmentName)
+              : undefined,
           }));
           list.sort((a, b) => a.timestamp - b.timestamp);
           callback(list);

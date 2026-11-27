@@ -32,6 +32,8 @@ import {
   type PitchIdeaPayload,
   type ProfitProjection,
   PITCH_CATEGORIES,
+  isDigitalProductCategory,
+  DIGITAL_PRODUCT_CATEGORIES,
 } from "@/lib/investorPitchSchema";
 
 export {
@@ -165,7 +167,7 @@ function normalizeStage1(stage1Doc: Record<string, unknown>, investmentIdea: Rec
   const raise = investmentIdea.requiredInvestmentPkr;
   return {
     ideaDescription: String(
-      stage1Doc.ideaDescription ?? investmentIdea.description ?? "Founder-pitched opportunity on SmartBiz.",
+      stage1Doc.ideaDescription ?? investmentIdea.description ?? "Founder-pitched opportunity on InvestBiz.",
     ),
     expectedRoi: String(
       stage1Doc.expectedRoi ?? (roi != null ? `${roi}% annually` : "Disclosed at pitch"),
@@ -221,7 +223,7 @@ function normalizeStage2(
     founderBackground: {
       yearsExperience: Number(founderBg.yearsExperience ?? 0),
       priorVentures: String(founderBg.priorVentures ?? "Disclosed by founder at pitch"),
-      education: String(founderBg.education ?? "Verified via SmartBiz entrepreneur onboarding"),
+      education: String(founderBg.education ?? "Verified via InvestBiz entrepreneur onboarding"),
       verificationScore: Number(founderBg.verificationScore ?? 85),
     },
     marketInsight: {

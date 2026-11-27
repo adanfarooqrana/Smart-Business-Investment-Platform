@@ -18,7 +18,7 @@ import { placeSampleOrder } from "@/services/sampleOrderService";
 import { toast } from "sonner";
 
 const DELIVERY_SERVICES = [
-  { id: "rider" as const, label: "SmartBiz Rider", sub: "Fastest · Most affordable", base: 120, perKm: 8, api: "SB-RIDER-API (demo)" },
+  { id: "rider" as const, label: "InvestBiz Rider", sub: "Fastest · Most affordable", base: 120, perKm: 8, api: "SB-RIDER-API (demo)" },
   { id: "postex" as const, label: "PostEx", sub: "Nationwide parcel", base: 150, perKm: 10, api: "PostEx REST v2 (hook ready)" },
   { id: "leopard" as const, label: "Leopard Courier", sub: "Express 24–48h", base: 200, perKm: 12, api: "Leopard Track API (hook ready)" },
   { id: "tcs" as const, label: "TCS", sub: "Premium insured", base: 250, perKm: 15, api: "TCS Shipment API (hook ready)" },

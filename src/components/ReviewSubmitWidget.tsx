@@ -31,7 +31,7 @@ export function ReviewSubmitWidget({ roleLabel, className = "" }: ReviewSubmitWi
     (role === "investor" && investor?.name) ||
     (role === "consultant" && consultant?.name) ||
     currentUser?.name ||
-    "SmartBiz Member";
+    "InvestBiz Member";
 
   const avatar =
     currentUser?.avatarUrl && currentUser.avatarUrl.startsWith("http")
@@ -85,7 +85,7 @@ export function ReviewSubmitWidget({ roleLabel, className = "" }: ReviewSubmitWi
           <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Apna review yahan likhein... (e.g. SmartBiz se mujhe verified deals milay)"
+            placeholder="Apna review yahan likhein... (e.g. InvestBiz se mujhe verified deals milay)"
             rows={3}
             className="resize-none border-amber-200/70 bg-white"
           />
