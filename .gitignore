@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-rebuilt
 .output
 .vinxi
 .tanstack/**
@@ -44,3 +45,12 @@ kyc-engine/__pycache__/
 *.njsproj
 *.sln
 *.sw?
+
+# Backend Firebase credentials and local files
+/backend/firebase-service-account.json
+/backend/.env
+/backend/.venv/
+/backend/static/uploads/
+/backend/private/
+
+/backend/.kyc-runtime/
